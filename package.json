@@ -1,0 +1,16 @@
+{
+  "name": "simple-minecraft-launcher",
+  "version": "1.0.0",
+  "description": "A minimal Minecraft Java Edition launcher written in Node.js",
+  "type": "module",
+  "main": "minecraft-verision-installer.js",
+  "scripts": {
+    "start": "node minecraft-verision-installer.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1"
+  }
+}
