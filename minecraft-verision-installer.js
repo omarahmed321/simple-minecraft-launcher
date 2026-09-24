@@ -213,7 +213,7 @@ const allowed = isAllowed(argument.rules);
     }
 }
 
-// fucking function makes a 128 bit hash uuid for every different user 
+//  function makes a 128 bit hash uuid for every different user 
 function getOfflineUUID(username) {
     const hash = crypto
         .createHash("md5")
