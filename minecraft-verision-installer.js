@@ -1,21 +1,39 @@
-
 import { writeFile ,mkdir } from "node:fs/promises";
 import AdmZip from "adm-zip";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
-// main setttings
+//--------- main setttings
 const VERISION ='26.3'
 const USERNAME = 'Omar'
 const MAX_MEMORY = '4G'
+const JAVA_PATH = 'java'
 
+
+//--------- Platform / Rules 
+const platform = os.platform()
+const minecraftPlatform =platform == 'win32'? 'windows': platform == 'darwin'? 'osx': platform == 'linux'? 'linux': null;
+const  ArchReplacements= { x64: "x86_64", ia32: "x86", arm64: "arm64" };
+const minecraftArch = ArchReplacements[process.arch];
+
+function isAllowed(rules) {
+    if (!rules) return true;
+    let allowed = false;
+    for (const rule of rules) {
+        let matches = true;
+        if (rule.features) matches = false;
+        if (rule.os?.name && rule.os.name !== minecraftPlatform) matches = false;
+        if (rule.os?.arch && rule.os.arch !== minecraftArch) matches = false;
+        if (matches) allowed = rule.action === "allow";
+    }
+    return allowed;
+}
+
+//--------- Version
 const MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
-// The files required to get the game working (client.jar, libraries, assets, natives)
-
-// fetching the version data first 
 async function getJsonVerisonInfo(verisionId){
     const responce = await fetch(MANIFEST_URL);
     const manifest = await  responce.json();
@@ -23,8 +41,8 @@ const verision = manifest.versions.find((verision)=>{ return verision.id === ver
 return verision
 }
 const verision = await getJsonVerisonInfo(VERISION);
-console.log(verision)
-// fetching the version url from the first object 
+
+
 async function getVersionJson(versionUrl){
     const responce= await fetch(versionUrl);
     const json = await responce.json();
@@ -32,29 +50,21 @@ async function getVersionJson(versionUrl){
 }
 const JSON_FILE = await getVersionJson(verision.url)
 
+const libraries = JSON_FILE.libraries.filter((lib) => {
+    return isAllowed(lib.rules) && lib.downloads?.artifact;
+});
 
-
-// 1- Client.jar
-// here we can see the client jar 
-console.log("-----------------------------------------------")
-console.log("Client")
-console.log(JSON_FILE.downloads.client);
-// here we can see the server jar
-console.log("-----------------------------------------------")
-console.log("Server")
-console.log(JSON_FILE.downloads.server);
-console.log("-----------------------------------------------")
-// the function that downloads the client jar
+//--------- Client.jar
 async function getClientJar(VersionJsonDownloadsClient){
+    console.log(`Downloading: ./client-${verision.id}.jar`)
     const responce =await fetch(VersionJsonDownloadsClient)
     const jarFile = await responce.arrayBuffer();
     await writeFile(`./client-${verision.id}.jar`, Buffer.from(jarFile) )
     return jarFile
 }
 await getClientJar(JSON_FILE.downloads.client.url)
-// here we 've finsihed installing the correct client.jar that the version needed 
-// ---------------------------------------------------------------------------------------------
-// now let's go for the libraries
+
+//--------- Libraries
 
 console.log("-----------------------------------------------")
 async function getArtifactUrl(library){
@@ -69,12 +79,11 @@ async function getArtifactUrl(library){
 }
 // تحميل
 
-for (const library of JSON_FILE.libraries) {
+ for (const library of libraries) {
     await getArtifactUrl(library);
-}
+ }
 
-// ---------------------------------------------------------------------------------------------
-// now let's go for the assets
+//--------- Assets
 const ASSETURL = JSON_FILE.assetIndex.url
 
 
@@ -107,11 +116,11 @@ return data
 }
 
 // Downloading  / تحميل
-for (const [path, asset] of Object.entries(assetjson.objects)) {
+ for (const [path, asset] of Object.entries(assetjson.objects)) {
 
-    await getHashes(asset.hash, path);
+     await getHashes(asset.hash, path);
 
-}
+ }
 
 //i'll make it concurrency limit on this
 
@@ -119,39 +128,15 @@ for (const [path, asset] of Object.entries(assetjson.objects)) {
 //     Object.entries(assetjson.objects).map(([path,assets])=>getHashes(assets.hash,path))
 // )
 
-// ---------------------------------------------------------------------------------------------
-// now let's go for the natives
-console.log("-----------------------------------------------")
-console.log("natives (windows,linux,macos)files")
-const native = JSON_FILE.libraries.filter((object)=>{return object.name.includes("natives")})
-console.log(native)
-console.log("-----------------------------------------------")
-const platform = os.platform()
-const minecraftPlatform =platform == 'win32'? 'windows': platform == 'darwin'? 'osx': platform == 'linux'? 'linux': null;
-
-const filteredNativeByPlatform = native.filter((object)=>{
-return object.rules.some((rule)=>{
-    return rule.os.name == minecraftPlatform && rule.action == 'allow'
-})
-
-})
+//--------- Natives
+const filteredNativeByPlatform = libraries.filter((lib) => lib.name.includes("natives"));
 console.log("Natives")
-async function getNatives (filteredNativesByPlatformURL,path){
-    const response = await fetch(filteredNativesByPlatformURL);
-    const data = await response.arrayBuffer();
-    await mkdir(`./libraries/${path.substring(0,path.lastIndexOf('/'))}`,{recursive:true})
-    await writeFile(`./libraries/${path}`,Buffer.from(data))
-}
-// تحميل
-for (const native of filteredNativeByPlatform) {
-    
-await getNatives(native.downloads.artifact.url,native.downloads.artifact.path)
-}
+
 
 // ---------------------------------------------------------------------------------------------
 // now we have downloaded all the required files we need to do (extraction,manage launch arguments & class path ,launch the game )
 
-// extraction
+//--------- Extraction
 // make all the natives from .jar (zipped data) to .so files and more 
 const nativeExtension =
       platform == 'win32' ? '.dll'
@@ -160,70 +145,51 @@ const nativeExtension =
     : null;
     
 for (const native of filteredNativeByPlatform) {
-const path = native.downloads.artifact.path;
+const jarPath = native.downloads.artifact.path;
+const zip = new AdmZip(`./libraries/${jarPath}`);
 
-const zip = new AdmZip(`./libraries/${path}`);
+
 const entries = zip.getEntries();
 const filesWithoutFolders = entries.filter((entry)=>{return !entry.isDirectory })
 
 const nativeFiles = filesWithoutFolders.filter((entry)=>{
     return entry.entryName.endsWith(nativeExtension)
 })
-// تحميل
-for(const entry of nativeFiles){
-    const data =entry.getData();
-        await mkdir(`./natives/${entry.entryName.substring(0, entry.entryName.lastIndexOf('/'))}`,{ recursive: true } );
-   await writeFile(`./natives/${entry.entryName}`, data);
-   console.log(`Extracting: ${entry.entryName}`)
+// تحميل / فك ضغط
+
+for (const entry of nativeFiles) {
+    const fileName = path.basename(entry.entryName);
+    await mkdir("./natives", { recursive: true });
+    await writeFile(`./natives/${fileName}`, entry.getData());
+    console.log(`Extracting: ${fileName}`);
+}
 }
 
-}
-
-// ---------------------------------------------------------------------------------------------
-// launch Arguments
-
-
-// first gathering librarypaths
-const libPaths = JSON_FILE.libraries.map((lib)=>{return `./libraries/${lib.downloads.artifact.path}`})
+//--------- Classpath
+const libPaths = libraries.map((lib)=>{return `./libraries/${lib.downloads.artifact.path}`})
 const classpath = [
     `./client-${verision.id}.jar`,
     ...libPaths
 ];
-
 const classpathValue = classpath.join(path.delimiter)
 console.log("-----------------------------------------------");
-const testRule = JSON_FILE.arguments.jvm[0].rules[0];
 
-
-function DoesRuleMatch(rule){
-    if(rule.features){return false} 
-if(rule.os?.name)if(rule.os.name !== minecraftPlatform){return false}
-if(rule.os?.arch)if(rule.os.arch !== process.arch){return false}
-if(rule.action !== "allow") {return false}
-return true;
-}
-
+//--------- JvmArguments
 const jvmArguments=[]
 
 for(const argument of JSON_FILE.arguments.jvm){
     if(typeof argument ==="string")jvmArguments.push(argument);
     if(typeof argument === "object"){
-        const allowed = argument.rules.some((rule) => {
-            return DoesRuleMatch(rule);
-        });
+const allowed = isAllowed(argument.rules);
 
       if(allowed){
-jvmArguments.push(...argument.value)
+if (Array.isArray(argument.value)) jvmArguments.push(...argument.value);
+else jvmArguments.push(argument.value);
       }
     }
 }
-
-
-
-
 // Game arguments
 const gameArguments =[]
-
 
 for (const argument of JSON_FILE.arguments.game) {
 
@@ -233,9 +199,7 @@ for (const argument of JSON_FILE.arguments.game) {
 
     if (typeof argument === "object") {
 
-        const allowed = argument.rules.some((rule) => {
-            return DoesRuleMatch(rule);
-        });
+const allowed = isAllowed(argument.rules);
 
      if (allowed) {
 
@@ -263,9 +227,8 @@ function getOfflineUUID(username) {
 
     return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}`;
 }
-
 const offlineUUID = getOfflineUUID(USERNAME);
-
+//--------- Replacements
 const replacements = {
 
     "${classpath}": classpathValue,
@@ -279,85 +242,65 @@ const replacements = {
     "${clientid}": "0",
     "${assets_root}": "./assets",
     "${auth_xuid}": "",
-
+    "${user_type}": "legacy",
     "${version_name}": verision.id,
     "${version_type}": JSON_FILE.type,
-    "${assets_root}": "./assets",
+
     "${game_directory}": process.cwd(),
-    "${assets_root}": "./assets",
+
     "${assets_index_name}": JSON_FILE.assetIndex.id
 };
 
- let index = 0;
-
-for (const argument of jvmArguments) {
-
-    if (argument.includes("${")) {
-
-        const start = argument.indexOf("${");
-        const end = argument.indexOf("}", start);
-
-        const placeholder = argument.substring(start, end + 1);
-
-          if (placeholder in replacements) {
-         const newArgument =
-        argument.substring(0, start) +replacements[placeholder] +argument.substring(end + 1);
-
-    jvmArguments[index] = newArgument;
-        }
-    }
-
-    index++;
+function applyReplacements(argument) {
+    return argument.replace(/\$\{(\w+)\}/g, (placeholder) => {
+        return placeholder in replacements ? replacements[placeholder] : placeholder;
+    });
 }
 
-let gameIndex = 0;
-for (const argument of gameArguments) {
 
-    if (argument.includes("${")) {
-
-        const start = argument.indexOf("${");
-        const end = argument.indexOf("}", start);
-
-        const placeholder = argument.substring(start, end + 1);
-
-        if (placeholder in replacements) {
-
-            const newArgument =
-                argument.substring(0, start) +
-                replacements[placeholder] +
-                argument.substring(end + 1);
-
-            gameArguments[gameIndex] = newArgument;
-        }
-    }
-
-    gameIndex++;
-}
-
-const optionalArguments = new Set([
-    "--width",
-    "--height",
-    "--quickPlayPath",
-    "--quickPlaySingleplayer",
-    "--quickPlayMultiplayer",
-    "--quickPlayRealms"
-]);
-
-for (let i = 0; i < gameArguments.length; i++) {
-    if (optionalArguments.has(gameArguments[i])) {
-        gameArguments.splice(i, 2);
-        i--;
-    }
-}
 jvmArguments.push(`-Xmx${MAX_MEMORY}`);
+const finalJvmArguments = jvmArguments.map(applyReplacements);
+const finalGameArguments = gameArguments.map(applyReplacements);
 const javaArguments = [
-    ...jvmArguments,
+    ...finalJvmArguments,
     JSON_FILE.mainClass,
-    ...gameArguments
+    ...finalGameArguments
 ];
 
+console.log("JVM:", finalJvmArguments);
+console.log("GAME:", finalGameArguments);
+console.log("--------------------------------------------")
+//--------- Java Check
+const requiredJava = JSON_FILE.javaVersion?.majorVersion ?? 8;
+console.log("Required Java:", requiredJava);
+function getInstalledJavaVersion(javaPath) {
+    const result = spawnSync(javaPath, ["-version"], { encoding: "utf8" });
+    if (result.error) return null;
 
-const minecraft = spawn("java", javaArguments);
+    const text = result.stderr;
+  
+    const versionText = text.split('"')[1];
+    if (!versionText) return null;
+
+    const parts = versionText.split(".");
+    if (parts[0] === "1") return Number(parts[1]);
+    return Number(parts[0]);
+}
+
+
+const installedJava = getInstalledJavaVersion(JAVA_PATH);
+console.log("Installed Java:", installedJava);
+if (installedJava === null) {
+    console.log(`Java not found at "${JAVA_PATH}". Install Java ${requiredJava} and try again.`);
+    process.exit(1);
+}
+
+if (installedJava < requiredJava) {
+    console.log(`Minecraft ${verision.id} needs Java ${requiredJava}, but you have Java ${installedJava}.`);
+    process.exit(1);
+}
+//--------- Launch
+const minecraft = spawn(JAVA_PATH, javaArguments);
 
 minecraft.stdout.on("data", (data) => {
     console.log("OUT:", data.toString());
