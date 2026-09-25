@@ -9,9 +9,10 @@ import * as readline from 'node:readline/promises';
 
 //--------- main setttings
 
-const USERNAME = 'Omar'
+
 
 const JAVA_PATH = 'java'
+const BASE_DIR = import.meta.dirname
 
 
 //--------- fetching all version numbers and their types
@@ -31,11 +32,22 @@ const answer = await rl.question('Which version do u wanna install / play? ');
 const chosen = allVersions.versions[Number(answer) - 1];
 if (!chosen) { console.log("Invalid number"); process.exit(1); }
 console.log("You chose:", chosen.id, chosen.type);
-const memAllocated=await rl.question("How much memory u wanna the game allocate? (write only the number like 3 or 5)");
-console.log(`you have set the max memory usage to -Xmx${memAllocated}G `)
+const USERNAME =await rl.question("The name of the user in the game? ");
+if (!/^\w{3,16}$/.test(USERNAME)) {
+    console.log("username must be 3-16 characters, letters, numbers, and u can use _");
+    process.exit(1);
+}
+console.log(`username is ${USERNAME} `)
+const memAllocated=await rl.question("How much memory u wanna the game allocate (write number for example 3)? ");
+const memNumber = Number(memAllocated);
+if (!Number.isInteger(memNumber) || memNumber < 1 || memNumber > 32) {
+    console.log("Memory must be a whole number between 1 and 32");
+    process.exit(1);
+}
+console.log(`you have set the max memory usage to -Xmx${memNumber}G `)
 await rl.question("press enter to continue")
 rl.close();
-const GAME_DIR = path.resolve("versions", chosen.id)
+const GAME_DIR = path.resolve(BASE_DIR, "versions", chosen.id)
 
 //--------- Platform / Rules / concurrency limit function
 const platform = os.platform()
@@ -137,13 +149,13 @@ console.log("-----------------------------------------------")
 async function getArtifactUrl(library){
          const liburl = library.downloads.artifact.url;
     const path = library.downloads.artifact.path;
-    if (existsSync(`./libraries/${path}`)) return console.log(`Exists: ${path}`);
+   if (existsSync(`${BASE_DIR}/libraries/${path}`)) return console.log(`Exists: ${path}`);
    
   console.log(`Downloading: ${path}`)
     const responce = await fetch(liburl)
     const jarFile = await responce.arrayBuffer();
-    await mkdir("./libraries/" + path.substring(0,path.lastIndexOf('/')),{recursive:true}) 
-    await writeFile(`./libraries/${path}`, Buffer.from(jarFile))
+    await mkdir(`${BASE_DIR}/libraries/` + path.substring(0,path.lastIndexOf('/')),{recursive:true}) 
+   await writeFile(`${BASE_DIR}/libraries/${path}`, Buffer.from(jarFile))
 
 }
 
@@ -163,22 +175,22 @@ async function getAssets(asseturl){
 console.log("-----------------------------------------------")
 console.log("Asseturl")
 const assetjson = await getAssets(ASSETURL)
-await mkdir('./assets/indexes',{recursive:true})
-await writeFile(`./assets/indexes/${JSON_FILE.assetIndex.id}.json`, JSON.stringify(assetjson))
+await mkdir(`${BASE_DIR}/assets/indexes`,{recursive:true})
+await writeFile(`${BASE_DIR}/assets/indexes/${JSON_FILE.assetIndex.id}.json`, JSON.stringify(assetjson))
 
 
 console.log("-----------------------------------------------")
 console.log("Hashes")
 //  *
 async function getHashes(hash,path){
-    if (existsSync(`./assets/objects/${hash.substring(0,2)}/${hash}`)) return;
+    if (existsSync(`${BASE_DIR}/assets/objects/${hash.substring(0,2)}/${hash}`)) return;
     console.log(`Downloading: ${path}`)
 
     const responce = await fetch(`https://resources.download.minecraft.net/${hash.substring(0,2)}/${hash}`)
 const data = await responce.arrayBuffer();
 
-await mkdir(`./assets/objects/${hash.substring(0,2)}`,{recursive:true})
-await writeFile(`./assets/objects/${hash.substring(0,2)}/${hash}` ,Buffer.from(data));
+await mkdir(`${BASE_DIR}/assets/objects/${hash.substring(0,2)}`,{recursive:true})
+await writeFile(`${BASE_DIR}/assets/objects/${hash.substring(0,2)}/${hash}` ,Buffer.from(data));
 return data
 }
 
@@ -219,7 +231,7 @@ const nativeExtension =
     
 for (const native of filteredNativeByPlatform) {
 const jarPath = native.downloads.artifact.path;
-const zip = new AdmZip(`./libraries/${jarPath}`);
+const zip = new AdmZip(`${BASE_DIR}/libraries/${jarPath}`);
 
 
 const entries = zip.getEntries();
@@ -239,7 +251,7 @@ await writeFile(`${GAME_DIR}/natives/${fileName}`, entry.getData());
 }
 
 //--------- Classpath
-const libPaths = libraries.map((lib)=>{return `./libraries/${lib.downloads.artifact.path}`})
+const libPaths = libraries.map((lib)=>{return `${BASE_DIR}/libraries/${lib.downloads.artifact.path}`})
 const classpath = [
    `${GAME_DIR}/client.jar`,
     ...libPaths
@@ -313,7 +325,7 @@ const replacements = {
     "${auth_uuid}": offlineUUID,
     "${auth_access_token}": "0",
     "${clientid}": "0",
-    "${assets_root}": "./assets",
+    "${assets_root}": `${BASE_DIR}/assets`,
     "${auth_xuid}": "",
     "${user_type}": "legacy",
     "${version_name}": verision.id,
@@ -331,7 +343,7 @@ function applyReplacements(argument) {
 }
 
 
-jvmArguments.push(`-Xmx${memAllocated}G`);
+jvmArguments.push(`-Xmx${memNumber}G`);
 const finalJvmArguments = jvmArguments.map(applyReplacements);
 const finalGameArguments = gameArguments.map(applyReplacements);
 const javaArguments = [
