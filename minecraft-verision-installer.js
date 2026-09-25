@@ -4,15 +4,40 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import * as readline from 'node:readline/promises';
 
 //--------- main setttings
-const VERISION ='26.3'
+
 const USERNAME = 'Omar'
-const MAX_MEMORY = '4G'
+
 const JAVA_PATH = 'java'
 
 
-//--------- Platform / Rules 
+//--------- fetching all version numbers and their types
+const MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+let allVersions;
+async function fetchAllVersions(){
+     const responce = await fetch(MANIFEST_URL);
+    allVersions = await  responce.json();
+    let i =1
+    allVersions.versions.map((version)=>{console.log(`${i}-version:${version.id} : type:${version.type}`);
+i++})
+}
+await fetchAllVersions();
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+const answer = await rl.question('Which version do u wanna install / play? ');
+
+const chosen = allVersions.versions[Number(answer) - 1];
+if (!chosen) { console.log("Invalid number"); process.exit(1); }
+console.log("You chose:", chosen.id, chosen.type);
+const memAllocated=await rl.question("How much memory u wanna the game allocate? (write only the number like 3 or 5)");
+console.log(`you have set the max memory usage to -Xmx${memAllocated}G `)
+await rl.question("press enter to continue")
+rl.close();
+const GAME_DIR = path.resolve("versions", chosen.id)
+
+//--------- Platform / Rules / concurrency limit function
 const platform = os.platform()
 const minecraftPlatform =platform == 'win32'? 'windows': platform == 'darwin'? 'osx': platform == 'linux'? 'linux': null;
 const  ArchReplacements= { x64: "x86_64", ia32: "x86", arm64: "arm64" };
@@ -31,16 +56,27 @@ function isAllowed(rules) {
     return allowed;
 }
 
-//--------- Version
-const MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+async function limiter(worker,assets,limit){
+    let turn =0;
+   
+   
+ async function runner(){
+    while (turn < assets.length) {
+        let asset = assets[turn];   
+        turn++;                    
+        await worker(asset);       
+    }
 
-async function getJsonVerisonInfo(verisionId){
-    const responce = await fetch(MANIFEST_URL);
-    const manifest = await  responce.json();
-const verision = manifest.versions.find((verision)=>{ return verision.id === verisionId})
-return verision
 }
-const verision = await getJsonVerisonInfo(VERISION);
+        const runners = [];
+    for (let i = 0; i < limit; i++) {
+        runners.push(runner());
+    }
+
+await Promise.all(runners);
+}
+//--------- Version
+const verision = chosen;
 
 
 async function getVersionJson(versionUrl){
@@ -49,27 +85,60 @@ async function getVersionJson(versionUrl){
     return json;
 }
 const JSON_FILE = await getVersionJson(verision.url)
-
 const libraries = JSON_FILE.libraries.filter((lib) => {
     return isAllowed(lib.rules) && lib.downloads?.artifact;
 });
+//--------- Java Check
+const requiredJava = JSON_FILE.javaVersion?.majorVersion ?? 8;
+console.log("Required Java:", requiredJava);
+function getInstalledJavaVersion(javaPath) {
+    const result = spawnSync(javaPath, ["-version"], { encoding: "utf8" });
+    if (result.error) return null;
+
+    const text = result.stderr;
+  
+    const versionText = text.split('"')[1];
+    if (!versionText) return null;
+
+    const parts = versionText.split(".");
+    if (parts[0] === "1") return Number(parts[1]);
+    return Number(parts[0]);
+}
+
+
+const installedJava = getInstalledJavaVersion(JAVA_PATH);
+console.log("Installed Java:", installedJava);
+if (installedJava === null) {
+    console.log(`Java not found at "${JAVA_PATH}". Install Java ${requiredJava} and try again.`);
+    process.exit(1);
+}
+
+if (installedJava < requiredJava) {
+    console.log(`Minecraft ${verision.id} needs Java ${requiredJava}, but you have Java ${installedJava}.`);
+    process.exit(1);
+}
+
 
 //--------- Client.jar
 async function getClientJar(VersionJsonDownloadsClient){
-    console.log(`Downloading: ./client-${verision.id}.jar`)
+    if (existsSync(`${GAME_DIR}/client.jar`)) return console.log(`Exists: ${GAME_DIR}/client.jar`);
+console.log(`Downloading: ${GAME_DIR}/client.jar`)
     const responce =await fetch(VersionJsonDownloadsClient)
     const jarFile = await responce.arrayBuffer();
-    await writeFile(`./client-${verision.id}.jar`, Buffer.from(jarFile) )
+   await writeFile(`${GAME_DIR}/client.jar`, Buffer.from(jarFile) )
     return jarFile
 }
+await mkdir(GAME_DIR, { recursive: true })
 await getClientJar(JSON_FILE.downloads.client.url)
 
 //--------- Libraries
 
 console.log("-----------------------------------------------")
 async function getArtifactUrl(library){
-        const liburl = library.downloads.artifact.url;
+         const liburl = library.downloads.artifact.url;
     const path = library.downloads.artifact.path;
+    if (existsSync(`./libraries/${path}`)) return console.log(`Exists: ${path}`);
+   
   console.log(`Downloading: ${path}`)
     const responce = await fetch(liburl)
     const jarFile = await responce.arrayBuffer();
@@ -77,11 +146,8 @@ async function getArtifactUrl(library){
     await writeFile(`./libraries/${path}`, Buffer.from(jarFile))
 
 }
-// تحميل
 
- for (const library of libraries) {
-    await getArtifactUrl(library);
- }
+await limiter(getArtifactUrl, libraries, 8);
 
 //--------- Assets
 const ASSETURL = JSON_FILE.assetIndex.url
@@ -105,6 +171,7 @@ console.log("-----------------------------------------------")
 console.log("Hashes")
 //  *
 async function getHashes(hash,path){
+    if (existsSync(`./assets/objects/${hash.substring(0,2)}/${hash}`)) return;
     console.log(`Downloading: ${path}`)
 
     const responce = await fetch(`https://resources.download.minecraft.net/${hash.substring(0,2)}/${hash}`)
@@ -115,18 +182,24 @@ await writeFile(`./assets/objects/${hash.substring(0,2)}/${hash}` ,Buffer.from(d
 return data
 }
 
-// Downloading  / تحميل
- for (const [path, asset] of Object.entries(assetjson.objects)) {
 
-     await getHashes(asset.hash, path);
 
- }
+const assetList = Object.entries(assetjson.objects);
 
-//i'll make it concurrency limit on this
 
-// await Promise.all(
-//     Object.entries(assetjson.objects).map(([path,assets])=>getHashes(assets.hash,path))
-// )
+async function downloadOneAsset(item) {
+    const path = item[0];
+    const asset = item[1];
+    return getHashes(asset.hash, path);
+}
+
+
+await limiter(downloadOneAsset, assetList,16);
+
+    
+
+
+
 
 //--------- Natives
 const filteredNativeByPlatform = libraries.filter((lib) => lib.name.includes("natives"));
@@ -155,12 +228,12 @@ const filesWithoutFolders = entries.filter((entry)=>{return !entry.isDirectory }
 const nativeFiles = filesWithoutFolders.filter((entry)=>{
     return entry.entryName.endsWith(nativeExtension)
 })
-// تحميل / فك ضغط
+
 
 for (const entry of nativeFiles) {
     const fileName = path.basename(entry.entryName);
-    await mkdir("./natives", { recursive: true });
-    await writeFile(`./natives/${fileName}`, entry.getData());
+  await mkdir(`${GAME_DIR}/natives`, { recursive: true });
+await writeFile(`${GAME_DIR}/natives/${fileName}`, entry.getData());
     console.log(`Extracting: ${fileName}`);
 }
 }
@@ -168,7 +241,7 @@ for (const entry of nativeFiles) {
 //--------- Classpath
 const libPaths = libraries.map((lib)=>{return `./libraries/${lib.downloads.artifact.path}`})
 const classpath = [
-    `./client-${verision.id}.jar`,
+   `${GAME_DIR}/client.jar`,
     ...libPaths
 ];
 const classpathValue = classpath.join(path.delimiter)
@@ -232,7 +305,7 @@ const offlineUUID = getOfflineUUID(USERNAME);
 const replacements = {
 
     "${classpath}": classpathValue,
-    "${natives_directory}": "./natives",
+    "${natives_directory}": `${GAME_DIR}/natives`,
     "${launcher_name}": "OmarsCustomLauncher",
     "${launcher_version}": "1.0",
 
@@ -246,7 +319,7 @@ const replacements = {
     "${version_name}": verision.id,
     "${version_type}": JSON_FILE.type,
 
-    "${game_directory}": process.cwd(),
+  "${game_directory}": GAME_DIR,
 
     "${assets_index_name}": JSON_FILE.assetIndex.id
 };
@@ -258,7 +331,7 @@ function applyReplacements(argument) {
 }
 
 
-jvmArguments.push(`-Xmx${MAX_MEMORY}`);
+jvmArguments.push(`-Xmx${memAllocated}G`);
 const finalJvmArguments = jvmArguments.map(applyReplacements);
 const finalGameArguments = gameArguments.map(applyReplacements);
 const javaArguments = [
@@ -270,35 +343,7 @@ const javaArguments = [
 console.log("JVM:", finalJvmArguments);
 console.log("GAME:", finalGameArguments);
 console.log("--------------------------------------------")
-//--------- Java Check
-const requiredJava = JSON_FILE.javaVersion?.majorVersion ?? 8;
-console.log("Required Java:", requiredJava);
-function getInstalledJavaVersion(javaPath) {
-    const result = spawnSync(javaPath, ["-version"], { encoding: "utf8" });
-    if (result.error) return null;
 
-    const text = result.stderr;
-  
-    const versionText = text.split('"')[1];
-    if (!versionText) return null;
-
-    const parts = versionText.split(".");
-    if (parts[0] === "1") return Number(parts[1]);
-    return Number(parts[0]);
-}
-
-
-const installedJava = getInstalledJavaVersion(JAVA_PATH);
-console.log("Installed Java:", installedJava);
-if (installedJava === null) {
-    console.log(`Java not found at "${JAVA_PATH}". Install Java ${requiredJava} and try again.`);
-    process.exit(1);
-}
-
-if (installedJava < requiredJava) {
-    console.log(`Minecraft ${verision.id} needs Java ${requiredJava}, but you have Java ${installedJava}.`);
-    process.exit(1);
-}
 //--------- Launch
 const minecraft = spawn(JAVA_PATH, javaArguments);
 
