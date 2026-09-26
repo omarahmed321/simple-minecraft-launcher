@@ -19,3 +19,4 @@ servers.dat
 servers.dat_old
 versions/
 textures_*.png
+package-lock.json
