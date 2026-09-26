@@ -1,4 +1,3 @@
-import { writeFile ,mkdir } from "node:fs/promises";
 import AdmZip from "adm-zip";
 import os from "node:os";
 import path from "node:path";
@@ -6,7 +5,7 @@ import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as readline from 'node:readline/promises';
-
+import { writeFile, mkdir, readFile } from "node:fs/promises";
 //--------- main setttings
 
 
@@ -15,41 +14,7 @@ const JAVA_PATH = 'java'
 const BASE_DIR = import.meta.dirname
 
 
-//--------- fetching all version numbers and their types
-const MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-let allVersions;
-async function fetchAllVersions(){
-     const responce = await fetch(MANIFEST_URL);
-    allVersions = await  responce.json();
-    let i =1
-    allVersions.versions.map((version)=>{console.log(`${i}-version:${version.id} : type:${version.type}`);
-i++})
-}
-await fetchAllVersions();
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-const answer = await rl.question('Which version do u wanna install / play? ');
-
-const chosen = allVersions.versions[Number(answer) - 1];
-if (!chosen) { console.log("Invalid number"); process.exit(1); }
-console.log("You chose:", chosen.id, chosen.type);
-const USERNAME =await rl.question("The name of the user in the game? ");
-if (!/^\w{3,16}$/.test(USERNAME)) {
-    console.log("username must be 3-16 characters, letters, numbers, and u can use _");
-    process.exit(1);
-}
-console.log(`username is ${USERNAME} `)
-const memAllocated=await rl.question("How much memory u wanna the game allocate (write number for example 3)? ");
-const memNumber = Number(memAllocated);
-if (!Number.isInteger(memNumber) || memNumber < 1 || memNumber > 32) {
-    console.log("Memory must be a whole number between 1 and 32");
-    process.exit(1);
-}
-console.log(`you have set the max memory usage to -Xmx${memNumber}G `)
-await rl.question("press enter to continue")
-rl.close();
-const GAME_DIR = path.resolve(BASE_DIR, "versions", chosen.id)
-
-//--------- Platform / Rules / concurrency limit function
+//--------- Platform / Rules / concurrency limit function /check downloading function / check if the sha1 valid GlobalFunctions
 const platform = os.platform()
 const minecraftPlatform =platform == 'win32'? 'windows': platform == 'darwin'? 'osx': platform == 'linux'? 'linux': null;
 const  ArchReplacements= { x64: "x86_64", ia32: "x86", arm64: "arm64" };
@@ -87,12 +52,63 @@ async function limiter(worker,assets,limit){
 
 await Promise.all(runners);
 }
+
+async function checkDownloading (url){
+    const response = await fetch(url);
+    if(!response.ok){
+        throw new Error(`lets say here that we are : ${response.status} and the url is:  ${url} `);
+        
+    }
+    return response;
+}
+
+async function checkSha1(filePath,readySha1){
+      if (!existsSync(filePath)) return false;
+        const data = await readFile(filePath);
+    const sha1 = crypto.createHash("sha1").update(data).digest("hex");
+    return sha1===readySha1;
+}
+//--------- fetching all version numbers and their types
+const MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+let allVersions;
+async function fetchAllVersions(){
+     const responce = await checkDownloading(MANIFEST_URL);
+    allVersions = await  responce.json();
+    let i =1
+    allVersions.versions.map((version)=>{console.log(`${i}-version:${version.id} : type:${version.type}`);
+i++})
+}
+await fetchAllVersions();
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+const answer = await rl.question('Which version do u wanna install / play? ');
+
+const chosen = allVersions.versions[Number(answer) - 1];
+if (!chosen) { console.log("Invalid number"); process.exit(1); }
+console.log("You chose:", chosen.id, chosen.type);
+const USERNAME =await rl.question("The name of the user in the game? ");
+if (!/^\w{3,16}$/.test(USERNAME)) {
+    console.log("username must be 3-16 characters, letters, numbers, and u can use _");
+    process.exit(1);
+}
+console.log(`username is ${USERNAME} `)
+const memAllocated=await rl.question("How much memory u wanna the game allocate (write number for example 3)? ");
+const memNumber = Number(memAllocated);
+if (!Number.isInteger(memNumber) || memNumber < 1 || memNumber > 32) {
+    console.log("Memory must be a whole number between 1 and 32");
+    process.exit(1);
+}
+console.log(`you have set the max memory usage to -Xmx${memNumber}G `)
+await rl.question("press enter to continue")
+rl.close();
+const GAME_DIR = path.resolve(BASE_DIR, "versions", chosen.id)
+
+
 //--------- Version
 const verision = chosen;
 
 
 async function getVersionJson(versionUrl){
-    const responce= await fetch(versionUrl);
+    const responce= await checkDownloading(versionUrl);
     const json = await responce.json();
     return json;
 }
@@ -133,9 +149,9 @@ if (installedJava < requiredJava) {
 
 //--------- Client.jar
 async function getClientJar(VersionJsonDownloadsClient){
-    if (existsSync(`${GAME_DIR}/client.jar`)) return console.log(`Exists: ${GAME_DIR}/client.jar`);
+   if(await checkSha1(`${GAME_DIR}/client.jar`,JSON_FILE.downloads.client.sha1)) return console.log(`the file exists at:${GAME_DIR}/client.jar`)
 console.log(`Downloading: ${GAME_DIR}/client.jar`)
-    const responce =await fetch(VersionJsonDownloadsClient)
+    const responce =await checkDownloading(VersionJsonDownloadsClient)
     const jarFile = await responce.arrayBuffer();
    await writeFile(`${GAME_DIR}/client.jar`, Buffer.from(jarFile) )
     return jarFile
@@ -149,10 +165,10 @@ console.log("-----------------------------------------------")
 async function getArtifactUrl(library){
          const liburl = library.downloads.artifact.url;
     const path = library.downloads.artifact.path;
-   if (existsSync(`${BASE_DIR}/libraries/${path}`)) return console.log(`Exists: ${path}`);
+   if(await checkSha1(`${BASE_DIR}/libraries/${path}`,library.downloads.artifact.sha1)) return console.log(`the file exists: ${BASE_DIR}/libraries/${path}`)
    
   console.log(`Downloading: ${path}`)
-    const responce = await fetch(liburl)
+    const responce = await checkDownloading(liburl)
     const jarFile = await responce.arrayBuffer();
     await mkdir(`${BASE_DIR}/libraries/` + path.substring(0,path.lastIndexOf('/')),{recursive:true}) 
    await writeFile(`${BASE_DIR}/libraries/${path}`, Buffer.from(jarFile))
@@ -168,7 +184,7 @@ const ASSETURL = JSON_FILE.assetIndex.url
 async function getAssets(asseturl){
     console.log(`Downloading: ${asseturl}`)
 
-    const responce = await fetch(asseturl)
+    const responce = await checkDownloading(asseturl)
     const assetjson = await responce.json();
     return assetjson
 }
@@ -183,10 +199,10 @@ console.log("-----------------------------------------------")
 console.log("Hashes")
 //  *
 async function getHashes(hash,path){
-    if (existsSync(`${BASE_DIR}/assets/objects/${hash.substring(0,2)}/${hash}`)) return;
+   if(await checkSha1(`${BASE_DIR}/assets/objects/${hash.substring(0,2)}/${hash}`,hash)) return console.log(`the file exists:${BASE_DIR}/assets/objects/${hash.substring(0,2)}/${hash}`)
     console.log(`Downloading: ${path}`)
 
-    const responce = await fetch(`https://resources.download.minecraft.net/${hash.substring(0,2)}/${hash}`)
+    const responce = await checkDownloading(`https://resources.download.minecraft.net/${hash.substring(0,2)}/${hash}`)
 const data = await responce.arrayBuffer();
 
 await mkdir(`${BASE_DIR}/assets/objects/${hash.substring(0,2)}`,{recursive:true})
