@@ -67,7 +67,7 @@ The launcher is a single script that runs these stages in order:
 - **Input validation**: Checks the version number, username (3 to 16 characters: letters, numbers, `_`), and memory (1 to 32 GB).
 - **Cross-platform**: Detects Windows or Linux, picks the matching natives, and uses the correct classpath separator.
 - **Run from anywhere**: All paths are resolved from the script's own folder, so it works no matter which folder the terminal is in.
-- **One-command install**: A single `curl` (Linux) or `irm` (Windows) line downloads, installs, and starts everything.
+- **One-command install**: A single line clones the repository, installs everything, and starts the launcher.
 - **One-step setup scripts**: `install.sh` (Linux) and `install.bat` (Windows) install everything and start the launcher; `run.sh` and `run.bat` start it afterwards.
 
 ---
@@ -97,19 +97,21 @@ Java **25** has been tested with every supported version, including 1.7.10. Java
 ## Run Locally
 
 ### Quick start (one command)
-Copy one line into a terminal. It downloads the launcher into a `simple-minecraft-launcher` folder in your home directory, installs **Node.js**, **Java 25**, and the npm packages, then starts the launcher.
+Copy one line into a terminal. It downloads the launcher with **Git**, installs **Node.js**, **Java 25**, and the npm packages, then starts the launcher.
 
 **Linux** (terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/omarahmed321/simple-minecraft-launcher/main/setup.sh | bash
+git clone https://github.com/omarahmed321/simple-minecraft-launcher.git && cd simple-minecraft-launcher && ./install.sh
 ```
 
-**Windows** (PowerShell):
-```powershell
-irm https://raw.githubusercontent.com/omarahmed321/simple-minecraft-launcher/main/setup.ps1 | iex
+**Windows** (Command Prompt, `cmd`):
+```bat
+git clone https://github.com/omarahmed321/simple-minecraft-launcher.git && cd simple-minecraft-launcher && install.bat
 ```
 
-Run the same command again at any time to update the launcher and start it. Your worlds and downloaded files are kept. To start it without updating, run `run.sh` or `run.bat` inside the `simple-minecraft-launcher` folder.
+`&&` runs the next command only if the previous one succeeded. The command needs **Git**; on Windows, install it first with `winget install -e --id Git.Git`, or download the ZIP from GitHub and double-click `install.bat`.
+
+After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside the `simple-minecraft-launcher` folder.
 
 ### Option 1: Setup script
 The scripts install **Node.js**, **Java 25**, and the npm packages, then start the launcher.
@@ -239,11 +241,9 @@ simple-minecraft-launcher/
 ├── install.bat                       # Windows setup and start script
 ├── run.sh                            # Linux start script
 ├── run.bat                           # Windows start script
-├── setup.sh                          # Linux one-line installer (download + install + start)
-├── setup.ps1                         # Windows one-line installer (download + install + start)
 ├── package.json                      # Project metadata, start script, dependencies
 ├── package-lock.json
-├── .gitattributes                    # Line endings for .sh (LF), .bat and .ps1 (CRLF)
+├── .gitattributes                    # Line endings for .sh (LF) and .bat (CRLF)
 ├── .gitignore
 └── README.md
 
