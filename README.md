@@ -1,13 +1,13 @@
-# Minecraft Launcher (Custom Game Launcher, CLI)
+# Simple Minecraft Launcher (Custom Game Launcher, CLI)
 
 **Status:** Local command-line tool. No live demo.
 
-A minimal **Minecraft: Java Edition** launcher written in **Node.js** that downloads a game version directly from Mojang's servers and starts it in **offline mode**.
+A **Minecraft: Java Edition** launcher written in **Node.js** that lists every official version, downloads the one you pick directly from Mojang's servers, and starts it in **offline mode**.
 
 ![Node.js](https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=nodedotjs&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES_Modules-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 ![Java](https://img.shields.io/badge/Java-25-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows_%7C_macOS_%7C_Linux-555555?style=flat-square)
+![Platform](https://img.shields.io/badge/Platform-Windows_%7C_Linux-555555?style=flat-square)
 
 ---
 
@@ -15,181 +15,231 @@ A minimal **Minecraft: Java Edition** launcher written in **Node.js** that downl
 - [About](#about)
 - [Architecture](#architecture)
 - [Features](#features)
+- [Supported Versions](#supported-versions)
 - [Tech Stack](#tech-stack)
 - [Run Locally](#run-locally)
-- [Configuration](#configuration)
+- [Usage](#usage)
 - [Troubleshooting](#troubleshooting)
+- [Code Structure](#code-structure)
 - [Project Structure](#project-structure)
 
 ---
 
 ## About
-This project rebuilds the core job of the official Minecraft launcher from scratch: resolving a version, downloading every file it needs, and building the exact Java command that starts the game. It talks directly to Mojang's public **piston-meta** and **resources** APIs, with no third-party launcher libraries. It is a learning-focused project and is still in active development.
+This project rebuilds the core job of the official Minecraft launcher from scratch: resolving a version, downloading and verifying every file it needs, and building the exact Java command that starts the game. It talks directly to Mojang's public **piston-meta** and **resources** APIs, with no third-party launcher libraries. It understands both the modern and the legacy version formats, so one code path runs versions from **1.7.10** up to the latest release and snapshots.
 
 ---
 
 ## Architecture
-The launcher runs as a single script that executes these stages in order:
+The launcher is a single script that runs these stages in order:
 
-1. **Version resolution**: Fetches the version manifest (`version_manifest_v2.json`), finds the configured version, and downloads its **version JSON**, which describes every file and argument the game needs.
-2. **Client download**: Saves the game itself as `client-<version>.jar`.
-3. **Libraries**: Downloads every library listed in the version JSON into `libraries/`, keeping Maven-style paths.
-4. **Assets**: Downloads the **asset index** into `assets/indexes/`, then every asset object (sounds, textures, languages) into `assets/objects/<first 2 chars of hash>/<hash>`.
-5. **Natives**: Picks the platform-specific native libraries (LWJGL, etc.) for the current OS and extracts the `.dll`, `.so`, or `.dylib` files into `natives/`.
-6. **Arguments**: Evaluates the **rules** attached to each JVM and game argument, then replaces placeholders such as `${classpath}`, `${auth_player_name}`, and `${assets_root}` with real values.
-7. **Offline identity**: Generates a stable **offline UUID** from the username (MD5 of `OfflinePlayer:<name>`, version 3 UUID), the same method the vanilla server uses.
-8. **Launch**: Spawns `java` with the built arguments and streams the game's output to the terminal.
+1. **Version list**: Downloads the version manifest once and prints every version with its number and type (`release`, `snapshot`, `old_beta`, `old_alpha`).
+2. **Questions**: Asks for the version number, the in-game username, and the maximum memory in GB. Every answer is validated before anything is downloaded.
+3. **Version JSON**: Downloads the chosen version's JSON, which describes every file and argument the game needs.
+4. **Library normalization**: Reads the `libraries` list and converts both formats into one list of `{ path, url, sha1, isNative }` entries:
+   - **Modern format** (1.19+): natives are separate libraries with an `artifact`.
+   - **Legacy format** (before 1.19): natives live inside one library under `natives` and `downloads.classifiers`.
+5. **Java check**: Reads the required Java version from the JSON and compares it with the installed Java, before any large download starts.
+6. **Downloads**: Downloads `client.jar`, the libraries, the asset index, and every asset object. Libraries and assets download in parallel with a **concurrency limit** (8 and 16 at a time).
+7. **Verification**: Before downloading, every file that already exists is checked against the **SHA1** from Mojang. Valid files are skipped; missing, partial, or corrupted files are downloaded again. Failed HTTP responses stop the launcher instead of writing broken files.
+8. **Natives**: Extracts `.so`, `.dll`, or `.dylib` files from the native jars into the version's `natives/` folder.
+9. **Arguments**: Builds JVM and game arguments from the JSON:
+   - **Modern format** (1.13+): evaluates the `rules` on each entry in `arguments.jvm` and `arguments.game`.
+   - **Legacy format** (before 1.13): splits `minecraftArguments` into game arguments and adds the required JVM arguments (`-Djava.library.path` and `-cp`).
+10. **Placeholders**: Replaces every `${...}` placeholder (classpath, directories, username, UUID, and more) with real values.
+11. **Launch**: Starts Java with the final arguments and streams the game's output to the terminal.
 
-All files are stored in the project folder, which also acts as the **game directory** (worlds, logs, and settings are saved there).
+**Shared vs per-version files:** `libraries/` and `assets/` are shared by all versions because their paths are unique (versioned paths and SHA1 file names), so nothing is downloaded twice. Everything that belongs to one version (`client.jar`, `natives/`, worlds, logs, settings) lives in `versions/<version>/`.
+
+**Offline identity:** The player UUID is generated from the username with the same method the vanilla server uses for offline players (MD5 of `OfflinePlayer:<name>`, version 3 UUID), so the same name always gets the same UUID.
 
 ---
 
 ## Features
-- **Direct Mojang integration**: Downloads versions, libraries, and assets from official Mojang endpoints.
-- **Any version by ID**: Change one constant to launch a different release or snapshot.
-- **Cross-platform natives**: Detects Windows, macOS, or Linux and extracts the matching native libraries.
-- **Rule-based arguments**: Builds JVM and game arguments from the version JSON instead of hardcoding them.
-- **Offline mode**: Plays with a custom username and a deterministic offline UUID.
-- **Memory control**: Sets the maximum heap size (`-Xmx`) from a single setting.
+- **Interactive version picker**: Lists all official versions and snapshots with a number and type; choose by typing the number.
+- **Wide version support**: Runs modern and legacy version formats from one code path (see [Supported Versions](#supported-versions)).
+- **Per-version folders**: Each version gets its own game directory under `versions/`.
+- **Shared downloads**: Libraries and assets are downloaded once and reused by every version.
+- **SHA1 verification**: Skips valid files and repairs missing or corrupted ones automatically.
+- **Concurrency limit**: Parallel downloads with a fixed number of workers.
+- **Safe downloads**: Stops with a clear message on any failed HTTP response.
+- **Java check**: Stops before downloading if the installed Java is older than the version needs.
+- **Input validation**: Checks the version number, username (3 to 16 characters: letters, numbers, `_`), and memory (1 to 32 GB).
+- **Cross-platform**: Detects Windows or Linux, picks the matching natives, and uses the correct classpath separator.
+- **Run from anywhere**: All paths are resolved from the script's own folder, so it works no matter which folder the terminal is in.
+- **One-step setup scripts**: `install.sh` (Linux) and `install.bat` (Windows) install everything and start the launcher; `run.sh` and `run.bat` start it afterwards.
+
+---
+
+## Supported Versions
+
+| Minecraft versions | Status |
+|---|---|
+| 1.19 to 26.x (and snapshots) | Tested and working |
+| 1.13 to 1.18.2 | Tested and working (legacy natives) |
+| 1.7.10 to 1.12.2 | Tested and working (legacy natives and legacy arguments) |
+| Older than 1.7.3, beta, and alpha | Not supported (they use an older asset system) |
+
+Java **25** has been tested with every supported version, including 1.7.10. Java is backward compatible: a version that asks for Java 8 still runs on a newer Java.
 
 ---
 
 ## Tech Stack
 - **Runtime**: Node.js 22+ (ES modules, top-level `await`, built-in `fetch`)
 - **Language**: JavaScript
-- **Libraries**: [adm-zip](https://www.npmjs.com/package/adm-zip) for extracting native libraries from `.jar` archives
-- **Node built-ins**: `fs/promises`, `path`, `os`, `crypto`, `child_process`
-- **Game runtime**: Java (JDK or JRE) matching the version's `javaVersion.majorVersion`
+- **Library**: [adm-zip](https://www.npmjs.com/package/adm-zip) to extract native files from `.jar` archives
+- **Node built-ins**: `fs`, `fs/promises`, `path`, `os`, `crypto`, `child_process`, `readline/promises`
+- **Game runtime**: Java 25 (OpenJDK or Temurin)
 
 ---
 
 ## Run Locally
 
-### Prerequisites
-You need three things installed: **Git**, **Node.js 22 or newer**, and **Java**.
+### Option 1: Setup script (recommended)
+The scripts install **Node.js**, **Java 25**, and the npm packages, then start the launcher.
 
-The Java version depends on the Minecraft version you launch. The version JSON states it in `javaVersion.majorVersion`:
+**Linux** (Ubuntu / Debian, Arch / CachyOS / Manjaro, Fedora):
+```bash
+git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
+cd simple-minecraft-launcher
+./install.sh
+```
+The script uses `sudo` to install packages.
 
-| Minecraft version | Required Java |
-|---|---|
-| 26.1 and newer | Java 25 |
-| 1.20.5 to 1.21.x | Java 21 |
-| 1.18 to 1.20.4 | Java 17 |
-| 1.17 | Java 16 |
-| 1.16.5 and older | Java 8 |
-
-The default version in this project is **26.3**, so install **Java 25**.
-
-About **4 GB of free disk space** and an internet connection are needed for the first run.
-
-#### Windows
-Open **PowerShell** and run:
+**Windows** (10 or 11):
 ```powershell
-winget install --id Git.Git -e
-winget install --id OpenJS.NodeJS.LTS -e
-winget install --id EclipseAdoptium.Temurin.25.JDK -e
+git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 ```
-Close and reopen PowerShell so the new commands are on your `PATH`.
+Then open the folder and double-click **`install.bat`**.
 
-If `winget` is not available, install manually from [git-scm.com](https://git-scm.com/download/win), [nodejs.org](https://nodejs.org/), and [adoptium.net](https://adoptium.net/temurin/releases/?version=25). In the Temurin installer, enable **"Set JAVA_HOME"** and **"Add to PATH"**.
+On the first run, Windows does not see newly installed programs in the same window. If you get `'npm' is not recognized`, close the window and run `install.bat` again.
 
-#### macOS
-Install [Homebrew](https://brew.sh/) if you do not have it, then run:
+After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They only start the launcher and skip the installation step.
+
+### Option 2: Manual setup
+
+**Prerequisites:** Git, **Node.js 22 or newer**, and **Java 25**.
+
+| System | Command |
+|---|---|
+| Windows | `winget install -e --id OpenJS.NodeJS.LTS` and `winget install -e --id EclipseAdoptium.Temurin.25.JDK` |
+| Ubuntu / Debian | `sudo apt install nodejs npm openjdk-25-jdk` |
+| Arch / CachyOS | `sudo pacman -S nodejs npm jdk-openjdk` |
+| Fedora | `sudo dnf install nodejs npm java-latest-openjdk` |
+
+On older Ubuntu or Debian releases, the packaged Node.js can be older than 22 and `openjdk-25-jdk` may be missing. In that case, install Node.js from [nodejs.org](https://nodejs.org/) and Java from [adoptium.net](https://adoptium.net/temurin/releases/?version=25).
+
+Check the installation:
 ```bash
-brew install git node
-brew install --cask temurin@25
-```
-
-#### Linux
-**Ubuntu / Debian:**
-```bash
-sudo apt update
-sudo apt install -y git curl
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-```
-For Java 25, use `sudo apt install -y openjdk-25-jdk` if your release provides it. Otherwise install **Temurin 25** from [adoptium.net](https://adoptium.net/installation/linux/).
-
-**Arch Linux / CachyOS / Manjaro:**
-```bash
-sudo pacman -S --needed git nodejs npm jdk-openjdk
-```
-
-**Fedora:**
-```bash
-sudo dnf install -y git nodejs java-latest-openjdk
-```
-
-#### Verify the installation
-On every system, these commands must work:
-```bash
-git --version
 node --version    # v22.0.0 or higher
-java --version    # 25 for Minecraft 26.x
+java --version    # 25
 ```
 
-### Installation
+**Installation and execution:**
 ```bash
 git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 cd simple-minecraft-launcher
 npm install
-```
-
-### Execution
-```bash
 npm start
 ```
-Or run the script directly:
-```bash
-node minecraft-verision-installer.js
-```
-
-The **first run** downloads the client, libraries, and several thousand asset files, so it can take a while depending on your connection. When downloading finishes, the game window opens.
 
 ---
 
-## Configuration
-Settings are constants at the top of `minecraft-verision-installer.js`:
+## Usage
+The launcher asks three questions:
 
-| Constant | Default | Description |
-|---|---|---|
-| `VERISION` | `'26.3'` | Minecraft version ID to download and launch, exactly as listed in the [version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json) |
-| `USERNAME` | `'Omar'` | In-game player name (offline mode) |
-| `MAX_MEMORY` | `'4G'` | Maximum Java heap size, for example `2G`, `4G`, `6G` |
+```
+1-version:26.4-snapshot-1 : type:snapshot
+2-version:26.3 : type:release
+...
+Which version do u wanna install / play? 2
+The name of the user in the game? Omar
+How much memory u wanna the game allocate (write number for example 3)? 4
+press enter to continue
+```
 
-If you change `VERISION`, make sure your installed Java matches the table in [Prerequisites](#prerequisites).
+1. **Version number**: the number shown next to the version in the list.
+2. **Username**: 3 to 16 characters, using letters, numbers, and `_`.
+3. **Memory**: whole number of GB between 1 and 32 (passed to Java as `-Xmx<number>G`).
 
-**Offline mode note:** The launcher does not sign in to a Microsoft account, so online servers that require authentication (and Realms) will not accept the connection. Singleplayer and offline-mode servers work.
+The first run of a version downloads the client, its libraries, and its assets. Later runs verify the files and start much faster. Worlds, logs, and settings are saved in `versions/<version>/`.
+
+**Offline mode:** The launcher does not sign in to a Microsoft account. Singleplayer and offline-mode servers work; Realms and servers that require authentication do not.
+
+**Custom Java path:** To use a specific Java installation, change `JAVA_PATH` at the top of `minecraft-verision-installer.js` to the full path of the `java` executable.
 
 ---
 
 ## Troubleshooting
-- **`java: command not found` / `'java' is not recognized`**: Java is not installed or not on your `PATH`. Reinstall it with the "Add to PATH" option, then open a new terminal.
-- **`UnsupportedClassVersionError`**: Your Java is older than the version requires. Install the Java version from the table above.
-- **`Cannot use import statement outside a module`**: Your Node.js is too old or `package.json` is missing `"type": "module"`. Update to Node.js 22+.
-- **`Cannot find package 'adm-zip'`**: Run `npm install` inside the project folder.
-- **`Cannot read properties of undefined (reading 'url')`**: The value of `VERISION` does not exist in the version manifest. Check the spelling.
-- **Game crashes on startup with an `UnsatisfiedLinkError`**: The native libraries were not extracted correctly. Delete the `natives/` folder and run the launcher again.
+- **`Java not found at "java"`**: Java is not installed or not on your `PATH`. Run the setup script or install Java 25, then open a new terminal.
+- **`needs Java X, but you have Java Y`**: Your Java is older than the version requires. Install Java 25.
+- **`'npm' is not recognized` (Windows)**: Node.js was just installed. Close the window and run `install.bat` again.
+- **`Cannot find package 'adm-zip'`**: Run `npm install` in the project folder.
+- **`Invalid number`**: The number you typed is not in the version list.
+- **`lets say here that we are : 404 ...`**: A download failed on Mojang's side or the connection dropped. Run the launcher again; files that were already verified are skipped.
+- **Game crashes with `UnsatisfiedLinkError`**: Delete `versions/<version>/natives` and run again so the natives are extracted fresh.
+- **Game crashes after an interrupted download**: Run the launcher again. The SHA1 check finds and re-downloads any broken file.
+
+---
+
+## Code Structure
+All logic lives in `minecraft-verision-installer.js`, split into sections marked with `//---------` comments, in the order they run:
+
+| Section | Responsibility |
+|---|---|
+| **Settings** | `JAVA_PATH` and `BASE_DIR` (the script's folder, used for every path) |
+| **Platform / Rules / Global functions** | Detects the OS and CPU architecture, and defines the shared helpers below |
+| **Fetching all versions** | Downloads the manifest, prints the numbered list, asks the questions, validates the answers, and sets `GAME_DIR` |
+| **Version** | Downloads the version JSON and builds the normalized `libFiles` list |
+| **Java Check** | Compares the required Java version with the installed one and stops early if it is too old |
+| **Client.jar** | Downloads `client.jar` into the version folder |
+| **Libraries** | Downloads every entry in `libFiles` with the concurrency limit |
+| **Assets** | Downloads the asset index and every asset object with the concurrency limit |
+| **Natives / Extraction** | Extracts native files from the native jars into `versions/<version>/natives/` |
+| **Classpath** | Joins `client.jar` and all library jars with the platform separator |
+| **JvmArguments and GameArguments** | Builds arguments from `arguments` (modern) or `minecraftArguments` (legacy) |
+| **Replacements** | Maps every `${...}` placeholder to its value and applies it to all arguments |
+| **Launch** | Starts Java and streams the game output |
+
+**Shared helper functions:**
+
+| Function | Purpose |
+|---|---|
+| `isAllowed(rules)` | Evaluates Mojang `rules` (OS, architecture, features). The last matching rule wins. |
+| `limiter(worker, items, limit)` | Runs `worker` on every item with at most `limit` running at the same time |
+| `checkDownloading(url)` | `fetch` that throws a clear error on any non-OK HTTP status |
+| `checkSha1(filePath, sha1)` | Returns `true` only if the file exists and its SHA1 matches |
+| `getInstalledJavaVersion(javaPath)` | Runs `java -version` and returns the major version (handles the old `1.8` format) |
+| `getOfflineUUID(username)` | Builds the offline-mode player UUID |
+| `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
 
 ---
 
 ## Project Structure
 ```
 simple-minecraft-launcher/
-├── minecraft-verision-installer.js   # The launcher (download, extract, launch)
+├── minecraft-verision-installer.js   # The launcher
+├── install.sh                        # Linux setup and start script
+├── install.bat                       # Windows setup and start script
+├── run.sh                            # Linux start script
+├── run.bat                           # Windows start script
 ├── package.json                      # Project metadata, start script, dependencies
 ├── package-lock.json
+├── .gitattributes                    # Line endings for .sh (LF) and .bat (CRLF)
 ├── .gitignore
 └── README.md
 
-Created on first run (ignored by git):
-├── client-<version>.jar              # The game client
-├── libraries/                        # Java libraries in Maven layout
-├── natives/                          # Extracted .dll / .so / .dylib files
-├── assets/
-│   ├── indexes/                      # Asset index JSON
-│   └── objects/                      # Sounds, textures, languages (hashed)
-├── saves/                            # Singleplayer worlds
-├── logs/                             # Game logs
-└── options.txt                       # Game settings
+Created at runtime (ignored by git):
+├── node_modules/
+├── libraries/                        # Shared Java libraries (Maven layout)
+├── assets/                           # Shared assets
+│   ├── indexes/                      # Asset index JSON per version
+│   └── objects/                      # Sounds, textures, languages (by SHA1)
+└── versions/
+    └── <version>/                    # One folder per version, e.g. 26.3
+        ├── client.jar
+        ├── natives/                  # Extracted .so / .dll / .dylib files
+        ├── saves/                    # Worlds
+        ├── logs/
+        └── options.txt               # Game settings
 ```
