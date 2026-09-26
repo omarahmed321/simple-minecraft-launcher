@@ -242,8 +242,6 @@ simple-minecraft-launcher/
 ├── run.sh                            # Linux start script
 ├── run.bat                           # Windows start script
 ├── package.json                      # Project metadata, start script, dependencies
-├── package-lock.json
-├── .gitattributes                    # Line endings for .sh (LF) and .bat (CRLF)
 ├── .gitignore
 └── README.md
 
