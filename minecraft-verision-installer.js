@@ -113,9 +113,36 @@ async function getVersionJson(versionUrl){
     return json;
 }
 const JSON_FILE = await getVersionJson(verision.url)
-const libraries = JSON_FILE.libraries.filter((lib) => {
-    return isAllowed(lib.rules) && lib.downloads?.artifact;
-});
+
+const libFiles =[];
+for(const lib of JSON_FILE.libraries){
+    // new technique early Exit reduce code complexity
+  if (!isAllowed(lib.rules)) continue; 
+  if(lib.downloads?.artifact){
+    const libArtifact =lib.downloads.artifact
+    const file={
+        path:libArtifact.path,
+        url:libArtifact.url,
+        sha1:libArtifact.sha1,
+        isNative:lib.name.includes("natives")
+
+    }
+    libFiles.push(file)
+
+  }
+const libNative = lib.natives?.[minecraftPlatform]?.replace("${arch}", "64")
+const libClassifier = lib.downloads?.classifiers?.[libNative]
+if(libClassifier){
+    const file={
+          path: libClassifier.path,
+        url: libClassifier.url,
+        sha1: libClassifier.sha1,
+        isNative: true
+    }
+      libFiles.push(file)
+}
+
+}
 //--------- Java Check
 const requiredJava = JSON_FILE.javaVersion?.majorVersion ?? 8;
 console.log("Required Java:", requiredJava);
@@ -162,10 +189,10 @@ await getClientJar(JSON_FILE.downloads.client.url)
 //--------- Libraries
 
 console.log("-----------------------------------------------")
-async function getArtifactUrl(library){
-         const liburl = library.downloads.artifact.url;
-    const path = library.downloads.artifact.path;
-   if(await checkSha1(`${BASE_DIR}/libraries/${path}`,library.downloads.artifact.sha1)) return console.log(`the file exists: ${BASE_DIR}/libraries/${path}`)
+async function getArtifactUrl(file){
+         const liburl = file.url;
+    const path = file.path;
+   if(await checkSha1(`${BASE_DIR}/libraries/${path}`,file.sha1)) return console.log(`the file exists: ${BASE_DIR}/libraries/${path}`)
    
   console.log(`Downloading: ${path}`)
     const responce = await checkDownloading(liburl)
@@ -175,7 +202,7 @@ async function getArtifactUrl(library){
 
 }
 
-await limiter(getArtifactUrl, libraries, 8);
+await limiter(getArtifactUrl,libFiles , 8);
 
 //--------- Assets
 const ASSETURL = JSON_FILE.assetIndex.url
@@ -230,7 +257,7 @@ await limiter(downloadOneAsset, assetList,16);
 
 
 //--------- Natives
-const filteredNativeByPlatform = libraries.filter((lib) => lib.name.includes("natives"));
+const filteredNativeByPlatform = libFiles.filter((file) => file.isNative);
 console.log("Natives")
 
 
@@ -246,7 +273,7 @@ const nativeExtension =
     : null;
     
 for (const native of filteredNativeByPlatform) {
-const jarPath = native.downloads.artifact.path;
+const jarPath = native.path;
 const zip = new AdmZip(`${BASE_DIR}/libraries/${jarPath}`);
 
 
@@ -267,7 +294,8 @@ await writeFile(`${GAME_DIR}/natives/${fileName}`, entry.getData());
 }
 
 //--------- Classpath
-const libPaths = libraries.map((lib)=>{return `${BASE_DIR}/libraries/${lib.downloads.artifact.path}`})
+const libPaths = libFiles.map((file)=>{return `${BASE_DIR}/libraries/${file.path}`})
+
 const classpath = [
    `${GAME_DIR}/client.jar`,
     ...libPaths
@@ -275,9 +303,10 @@ const classpath = [
 const classpathValue = classpath.join(path.delimiter)
 console.log("-----------------------------------------------");
 
-//--------- JvmArguments
+//--------- JvmArguments and GameArguments
 const jvmArguments=[]
-
+const gameArguments =[]
+if(JSON_FILE.arguments){
 for(const argument of JSON_FILE.arguments.jvm){
     if(typeof argument ==="string")jvmArguments.push(argument);
     if(typeof argument === "object"){
@@ -289,8 +318,8 @@ else jvmArguments.push(argument.value);
       }
     }
 }
-// Game arguments
-const gameArguments =[]
+
+
 
 for (const argument of JSON_FILE.arguments.game) {
 
@@ -314,6 +343,15 @@ const allowed = isAllowed(argument.rules);
     }
 }
 
+}
+else{
+    const mainArguments =["-Djava.library.path=${natives_directory}","-cp","${classpath}"] 
+jvmArguments.push(...mainArguments);
+const gameArgument = JSON_FILE.minecraftArguments.split(" ");
+gameArguments.push(...gameArgument)
+
+}
+
 //  function makes a 128 bit hash uuid for every different user 
 function getOfflineUUID(username) {
     const hash = crypto
@@ -331,7 +369,7 @@ function getOfflineUUID(username) {
 const offlineUUID = getOfflineUUID(USERNAME);
 //--------- Replacements
 const replacements = {
-
+    "${user_properties}": "{}",
     "${classpath}": classpathValue,
     "${natives_directory}": `${GAME_DIR}/natives`,
     "${launcher_name}": "OmarsCustomLauncher",
@@ -368,8 +406,7 @@ const javaArguments = [
     ...finalGameArguments
 ];
 
-console.log("JVM:", finalJvmArguments);
-console.log("GAME:", finalGameArguments);
+
 console.log("--------------------------------------------")
 
 //--------- Launch
