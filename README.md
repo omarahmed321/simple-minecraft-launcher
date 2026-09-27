@@ -130,7 +130,9 @@ git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 ```
 Then open the folder and double-click **`install.bat`**.
 
-After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They only start the launcher and skip the installation step.
+`install.bat` installs Node.js and Java, then opens `run.bat` in a new window through Explorer, so the new window already sees the installed programs. On Linux, `install.sh` calls `run.sh` directly.
+
+After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They skip the system installation and only run `npm install` (instant when nothing changed) and the launcher.
 
 ### Option 2: Manual setup
 
@@ -189,7 +191,7 @@ The first run of a version downloads the client, its libraries, and its assets. 
 ## Troubleshooting
 - **`Java not found at "java"`**: Java is not installed or not on your `PATH`. Run the setup script or install Java 25, then open a new terminal.
 - **`needs Java X, but you have Java Y`**: Your Java is older than the version requires. Install Java 25.
-- **`'npm' is not recognized` (Windows)**: Node.js was installed to a non-default folder. Close the window and run `install.bat` again.
+- **`'npm' is not recognized` (Windows)**: The new window did not get the updated PATH. Close it and double-click `run.bat`.
 - **`Cannot find package 'adm-zip'`**: Run `npm install` in the project folder.
 - **`Invalid number`**: The number you typed is not in the version list.
 - **`lets say here that we are : 404 ...`**: A download failed on Mojang's side or the connection dropped. Run the launcher again; files that were already verified are skipped.
@@ -235,10 +237,10 @@ All logic lives in `minecraft-verision-installer.js`, split into sections marked
 ```
 simple-minecraft-launcher/
 ├── minecraft-verision-installer.js   # The launcher
-├── install.sh                        # Linux setup and start script
-├── install.bat                       # Windows setup and start script
-├── run.sh                            # Linux start script
-├── run.bat                           # Windows start script
+├── install.sh                        # Linux: installs Node.js and Java, then runs run.sh
+├── install.bat                       # Windows: installs Node.js and Java, then opens run.bat
+├── run.sh                            # Linux: npm install + start
+├── run.bat                           # Windows: npm install + start
 ├── package.json                      # Project metadata, start script, dependencies
 ├── .gitignore
 └── README.md
