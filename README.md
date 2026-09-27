@@ -67,7 +67,7 @@ The launcher is a single script that runs these stages in order:
 - **Input validation**: Checks the version number, username (3 to 16 characters: letters, numbers, `_`), and memory (1 to 32 GB).
 - **Cross-platform**: Detects Windows or Linux, picks the matching natives, and uses the correct classpath separator.
 - **Run from anywhere**: All paths are resolved from the script's own folder, so it works no matter which folder the terminal is in.
-- **One-command install**: A single line clones the repository, installs everything, and starts the launcher.
+- **One-command install**: A single line downloads the launcher (no Git needed), installs everything, and starts it.
 - **One-step setup scripts**: `install.sh` (Linux) and `install.bat` (Windows) install everything and start the launcher; `run.sh` and `run.bat` start it afterwards.
 
 ---
@@ -97,21 +97,21 @@ Java **25** has been tested with every supported version, including 1.7.10. Java
 ## Run Locally
 
 ### Quick start (one command)
-Copy one line into a terminal. It downloads the launcher with **Git**, installs **Node.js**, **Java 25**, and the npm packages, then starts the launcher.
+Copy one line into a terminal. It downloads the launcher from GitHub (no Git needed), installs **Node.js**, **Java 25**, and the npm packages, then starts the launcher.
 
 **Linux** (terminal):
 ```bash
-git clone https://github.com/omarahmed321/simple-minecraft-launcher.git && cd simple-minecraft-launcher && ./install.sh
+curl -fsSL https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.tar.gz | tar xz && cd simple-minecraft-launcher-main && ./install.sh
 ```
 
-**Windows** (Command Prompt, `cmd`):
-```bat
-git clone https://github.com/omarahmed321/simple-minecraft-launcher.git && cd simple-minecraft-launcher && install.bat
+**Windows** (PowerShell):
+```powershell
+iwr https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.zip -OutFile launcher.zip -UseBasicParsing; Expand-Archive launcher.zip . -Force; cd simple-minecraft-launcher-main; .\install.bat
 ```
 
-`&&` runs the next command only if the previous one succeeded. The command needs **Git**; on Windows, install it first with `winget install -e --id Git.Git`, or download the ZIP from GitHub and double-click `install.bat`.
+Both commands create a `simple-minecraft-launcher-main` folder in the current directory. After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside that folder.
 
-After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside the `simple-minecraft-launcher` folder.
+**Without a terminal:** click **Code**, then **Download ZIP** on the repository page, extract it, and double-click `install.bat` (Windows) or run `./install.sh` (Linux).
 
 ### Option 1: Setup script
 The scripts install **Node.js**, **Java 25**, and the npm packages, then start the launcher.
@@ -129,8 +129,6 @@ The script uses `sudo` to install packages.
 git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 ```
 Then open the folder and double-click **`install.bat`**.
-
-On the first run, Windows does not see newly installed programs in the same window. If you get `'npm' is not recognized`, close the window and run `install.bat` again.
 
 After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They only start the launcher and skip the installation step.
 
@@ -191,7 +189,7 @@ The first run of a version downloads the client, its libraries, and its assets. 
 ## Troubleshooting
 - **`Java not found at "java"`**: Java is not installed or not on your `PATH`. Run the setup script or install Java 25, then open a new terminal.
 - **`needs Java X, but you have Java Y`**: Your Java is older than the version requires. Install Java 25.
-- **`'npm' is not recognized` (Windows)**: Node.js was just installed. Close the window and run `install.bat` again.
+- **`'npm' is not recognized` (Windows)**: Node.js was installed to a non-default folder. Close the window and run `install.bat` again.
 - **`Cannot find package 'adm-zip'`**: Run `npm install` in the project folder.
 - **`Invalid number`**: The number you typed is not in the version list.
 - **`lets say here that we are : 404 ...`**: A download failed on Mojang's side or the connection dropped. Run the launcher again; files that were already verified are skipped.
