@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
-npm install
+[ -d node_modules ] || npm install
 node minecraft-verision-installer.js
