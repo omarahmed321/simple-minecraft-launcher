@@ -135,7 +135,7 @@ git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 ```
 Then open the folder and double-click **`install.bat`**.
 
-`install.bat` installs Node.js and Java, then opens `run.bat` in a new window through Explorer, so the new window already sees the installed programs. On Linux, `install.sh` calls `run.sh` directly.
+`install.bat` installs Node.js and Java, opens the launcher folder in File Explorer so you can see where it is, then opens `run.bat` in a new window through Explorer, so the new window already sees the installed programs. On Linux, `install.sh` calls `run.sh` directly.
 
 After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They skip the system installation, run `npm install` only if `node_modules` is missing, and start the launcher.
 
