@@ -104,12 +104,17 @@ Copy one line into a terminal. It downloads the launcher from GitHub (no Git nee
 curl -fsSL https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.tar.gz | tar xz && cd simple-minecraft-launcher-main && ./install.sh
 ```
 
-**Windows** (PowerShell):
-```powershell
-iwr https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.zip -OutFile launcher.zip -UseBasicParsing; Expand-Archive launcher.zip . -Force; cd simple-minecraft-launcher-main; .\install.bat
+**Windows** (Command Prompt):
+
+Open **Command Prompt normally, not as administrator** (press `Win`, type `cmd`, press Enter). It opens in your user folder (`C:\Users\<your name>`), and the launcher is downloaded there. Running it as administrator opens it in `C:\Windows\System32` instead, so avoid that; the installers ask for permission on their own when they need it.
+
+```bat
+curl -L -o launcher.zip https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.zip && tar -xf launcher.zip && cd simple-minecraft-launcher-main && install.bat
 ```
 
-Both commands create a `simple-minecraft-launcher-main` folder in the current directory. After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside that folder.
+`curl` and `tar` are built into Windows 10 and 11. This command is for Command Prompt; in PowerShell, open `cmd` first.
+
+Both commands create a `simple-minecraft-launcher-main` folder in the folder the terminal is opened in. After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside that folder.
 
 **Without a terminal:** click **Code**, then **Download ZIP** on the repository page, extract it, and double-click `install.bat` (Windows) or run `./install.sh` (Linux).
 
