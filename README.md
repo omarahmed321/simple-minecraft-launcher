@@ -132,7 +132,7 @@ Then open the folder and double-click **`install.bat`**.
 
 `install.bat` installs Node.js and Java, then opens `run.bat` in a new window through Explorer, so the new window already sees the installed programs. On Linux, `install.sh` calls `run.sh` directly.
 
-After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They skip the system installation and only run `npm install` (instant when nothing changed) and the launcher.
+After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They skip the system installation, run `npm install` only if `node_modules` is missing, and start the launcher.
 
 ### Option 2: Manual setup
 
@@ -239,13 +239,12 @@ simple-minecraft-launcher/
 ├── minecraft-verision-installer.js   # The launcher
 ├── install.sh                        # Linux: installs Node.js and Java, then runs run.sh
 ├── install.bat                       # Windows: installs Node.js and Java, then opens run.bat
-├── run.sh                            # Linux: npm install + start
-├── run.bat                           # Windows: npm install + start
+├── run.sh                            # Linux: npm install (first time only) + start
+├── run.bat                           # Windows: npm install (first time only) + start
 ├── package.json                      # Project metadata, start script, dependencies
-├── .gitignore
 └── README.md
 
-Created at runtime (ignored by git):
+Created at runtime:
 ├── node_modules/
 ├── libraries/                        # Shared Java libraries (Maven layout)
 ├── assets/                           # Shared assets
