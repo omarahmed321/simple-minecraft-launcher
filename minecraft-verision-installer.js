@@ -215,9 +215,10 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version")
-if(Number(isLocal)===1){}
-const versionAnswer = await rl.question("Which version do u wanna install ? ");
+// wait for the upgrade
+// const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version")
+// if(Number(isLocal)===1){}
+const versionAnswer = await rl.question("Which version do u wanna install /play ? ");
 
 const selectedVersion = allVersions.versions[Number(versionAnswer) - 1];
 if (!selectedVersion) {
