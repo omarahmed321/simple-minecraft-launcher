@@ -30,14 +30,29 @@ const minecraftArch = ARCH_MAP[process.arch];
 // function that fetch all version to show for the user
 let allVersions;
 
-async function fetchAllVersions() {
+async function fetchAllVersions(isLocal) {
+
   const response = await checkDownloading(MANIFEST_URL);
   allVersions = await response.json();
+  let shownVersions =allVersions.versions;
+if(Number(isLocal)===1){
+   shownVersions =allVersions.versions.filter((version)=>{
+    return existsSync(path.join(MINECRAFT_DIR,"versions",version.id,`${version.id}.json`))
+  })
+}
+else if(Number(isLocal)!==2){
+  console.log("Invalid input");
+    process.exit(1);
+
+  }
   let i = 1;
-  allVersions.versions.map((version) => {
+  shownVersions.map((version) => {
     console.log(`${i}-version:${version.id} : type:${version.type}`);
     i++;
   });
+  
+
+  return shownVersions;
 }
 // fucntions is allowed just takes rules and returns the boolean 
 // that we depend on to determine what files your system needs based on the arch
@@ -207,7 +222,7 @@ async function downloadOneAsset(item) {
 //--------- fetching all version numbers and their types
 
 
-await fetchAllVersions();
+
 
 // the questions
 const rl = readline.createInterface({
@@ -216,11 +231,11 @@ const rl = readline.createInterface({
 });
 
 // wait for the upgrade
-// const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version")
-// if(Number(isLocal)===1){}
+const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version")
+const shownVersions = await fetchAllVersions(isLocal);
 const versionAnswer = await rl.question("Which version do u wanna install /play ? ");
 
-const selectedVersion = allVersions.versions[Number(versionAnswer) - 1];
+const selectedVersion = shownVersions[Number(versionAnswer) - 1];
 if (!selectedVersion) {
   console.log("Invalid number");
   process.exit(1);
