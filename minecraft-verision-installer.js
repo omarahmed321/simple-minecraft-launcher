@@ -231,7 +231,7 @@ const rl = readline.createInterface({
 });
 
 // wait for the upgrade
-const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version")
+const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version \n your choice:")
 const shownVersions = await fetchAllVersions(isLocal);
 const versionAnswer = await rl.question("Which version do u wanna install /play ? ");
 
