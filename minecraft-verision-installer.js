@@ -10,6 +10,7 @@ import { writeFile, mkdir, readFile } from "node:fs/promises";
 
 const JAVA_PATH = "java";
 const BASE_DIR = import.meta.dirname;
+const MINECRAFT_DIR = path.join(BASE_DIR, ".minecraft");
 const MANIFEST_URL ="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const ASSETS_URL = "https://resources.download.minecraft.net";
 const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
@@ -17,9 +18,8 @@ const ASSET_DOWNLOAD_LIMIT = 16;
 
 //--------- Platform / Rules / concurrency limit function /check downloading function / check if the sha1 valid GlobalFunctions
 const platform = os.platform();
-const minecraftPlatform =platform == "win32"? "windows"
-    : platform == "darwin"? "osx": platform == "linux"? "linux": null;
-        if (!minecraftPlatform) {
+const minecraftPlatform =platform == "win32"? "windows" : platform == "darwin"? "osx": platform == "linux"? "linux": null;
+if (!minecraftPlatform) {
   console.log("Your OS is not supported");
   process.exit(1);
 }
@@ -138,30 +138,30 @@ async function getVersionJson(versionUrl) {
 // download client jar lol you could tell
 async function downloadClientJar(clientUrl) {
   if (
-    await checkSha1(`${gameDir}/client.jar`, versionJson.downloads.client.sha1)
+    await checkSha1(`${versionDir}/${selectedVersion.id}.jar`, versionJson.downloads.client.sha1)
   )
-    return console.log(`the file exists at:${gameDir}/client.jar`);
-  console.log(`Downloading: ${gameDir}/client.jar`);
+    return console.log(`the file exists at:${versionDir}/${selectedVersion.id}.jar`);
+  console.log(`Downloading: ${versionDir}/${selectedVersion.id}.jar`);
   const response = await checkDownloading(clientUrl);
   const jarFile = await response.arrayBuffer();
-  await writeFile(`${gameDir}/client.jar`, Buffer.from(jarFile));
+  await writeFile(`${versionDir}/${selectedVersion.id}.jar`, Buffer.from(jarFile));
   return jarFile;
 }
 // download library
 async function downloadLibrary(file) {
   const libUrl = file.url;
   const path = file.path;
-  if (await checkSha1(`${BASE_DIR}/libraries/${path}`, file.sha1))
-    return console.log(`the file exists: ${BASE_DIR}/libraries/${path}`);
+  if (await checkSha1(`${MINECRAFT_DIR}/libraries/${path}`, file.sha1))
+    return console.log(`the file exists: ${MINECRAFT_DIR}/libraries/${path}`);
 
   console.log(`Downloading: ${path}`);
   const response = await checkDownloading(libUrl);
   const jarFile = await response.arrayBuffer();
   await mkdir(
-    `${BASE_DIR}/libraries/` + path.substring(0, path.lastIndexOf("/")),
+    `${MINECRAFT_DIR}/libraries/` + path.substring(0, path.lastIndexOf("/")),
     { recursive: true },
   );
-  await writeFile(`${BASE_DIR}/libraries/${path}`, Buffer.from(jarFile));
+  await writeFile(`${MINECRAFT_DIR}/libraries/${path}`, Buffer.from(jarFile));
 }
 // idk the fucntion names is too good at this point?
 async function getAssetIndex(assetUrl) {
@@ -175,12 +175,12 @@ async function getAssetIndex(assetUrl) {
 async function downloadAsset(hash, path) {
   if (
     await checkSha1(
-      `${BASE_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
+      `${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
       hash,
     )
   )
     return console.log(
-      `the file exists:${BASE_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
+      `the file exists:${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
     );
   console.log(`Downloading: ${path}`);
 
@@ -189,11 +189,11 @@ async function downloadAsset(hash, path) {
   );
   const data = await response.arrayBuffer();
 
-  await mkdir(`${BASE_DIR}/assets/objects/${hash.substring(0, 2)}`, {
+  await mkdir(`${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}`, {
     recursive: true,
   });
   await writeFile(
-    `${BASE_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
+    `${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
     Buffer.from(data),
   );
   return data;
@@ -214,7 +214,10 @@ const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
 });
-const versionAnswer = await rl.question("Which version do u wanna install / play? ");
+
+const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version")
+if(Number(isLocal)===1){}
+const versionAnswer = await rl.question("Which version do u wanna install ? ");
 
 const selectedVersion = allVersions.versions[Number(versionAnswer) - 1];
 if (!selectedVersion) {
@@ -245,7 +248,8 @@ console.log(`you have set the max memory usage to -Xmx${memNumber}G `);
 await rl.question("press enter to continue");
 rl.close();
 // path.resolve actually will connect them all 
-const gameDir = path.resolve(BASE_DIR, "versions", selectedVersion.id);
+const versionDir = path.join(MINECRAFT_DIR, "versions", selectedVersion.id);
+const gameDir = MINECRAFT_DIR;
 const versionJson = await getVersionJson(selectedVersion.url);
 const requiredJava = versionJson.javaVersion?.majorVersion ?? 8;
 console.log("Required Java:", requiredJava);
@@ -302,8 +306,8 @@ if (installedJava < requiredJava) {
 }
 
 //--------- Client.jar
-
-await mkdir(gameDir, { recursive: true });
+await mkdir(versionDir, { recursive: true });
+await writeFile(`${versionDir}/${selectedVersion.id}.json`, JSON.stringify(versionJson));
 await downloadClientJar(versionJson.downloads.client.url);
 
 //--------- Libraries
@@ -315,9 +319,9 @@ await limiter(downloadLibrary, libFiles, LIBRARY_FILES_DOWNLOAD_LIMIT);
 //--------- Assets
 const assetUrl = versionJson.assetIndex.url;
 const assetIndex = await getAssetIndex(assetUrl);
-await mkdir(`${BASE_DIR}/assets/indexes`, { recursive: true });
+await mkdir(`${MINECRAFT_DIR}/assets/indexes`, { recursive: true });
 await writeFile(
-  `${BASE_DIR}/assets/indexes/${versionJson.assetIndex.id}.json`,
+  `${MINECRAFT_DIR}/assets/indexes/${versionJson.assetIndex.id}.json`,
   JSON.stringify(assetIndex),
 );
 const assetList = Object.entries(assetIndex.objects);
@@ -332,7 +336,7 @@ const nativeLibFiles = libFiles.filter((file) => file.isNative);
 // make all the natives from .jar (zipped data) to .so files and more
 for (const native of nativeLibFiles) {
   const jarPath = native.path;
-  const zip = new AdmZip(`${BASE_DIR}/libraries/${jarPath}`);
+  const zip = new AdmZip(`${MINECRAFT_DIR}/libraries/${jarPath}`);
 
   const entries = zip.getEntries();
   const filesWithoutFolders = entries.filter((entry) => {
@@ -345,17 +349,17 @@ for (const native of nativeLibFiles) {
 
   for (const entry of nativeFiles) {
     const fileName = path.basename(entry.entryName);
-    await mkdir(`${gameDir}/natives`, { recursive: true });
-    await writeFile(`${gameDir}/natives/${fileName}`, entry.getData());
+    await mkdir(`${versionDir}/natives`, { recursive: true });
+    await writeFile(`${versionDir}/natives/${fileName}`, entry.getData());
     console.log(`Extracting: ${fileName}`);
   }
 }
 
 //--------- Classpath
 const libPaths = libFiles.map((file) => {
-  return `${BASE_DIR}/libraries/${file.path}`;
+  return `${MINECRAFT_DIR}/libraries/${file.path}`;
 });
-const classpath = [`${gameDir}/client.jar`, ...libPaths];
+const classpath = [`${versionDir}/${selectedVersion.id}.jar`, ...libPaths];
 const classpathValue = classpath.join(path.delimiter);
 console.log("-----------------------------------------------");
 
@@ -406,7 +410,7 @@ if (versionJson.arguments) {
 const replacements = {
   "${user_properties}": "{}",
   "${classpath}": classpathValue,
-  "${natives_directory}": `${gameDir}/natives`,
+  "${natives_directory}": `${versionDir}/natives`,
   "${launcher_name}": "OmarsCustomLauncher",
   "${launcher_version}": "1.0",
 
@@ -414,7 +418,7 @@ const replacements = {
   "${auth_uuid}": offlineUUID,
   "${auth_access_token}": "0",
   "${clientid}": "0",
-  "${assets_root}": `${BASE_DIR}/assets`,
+  "${assets_root}": `${MINECRAFT_DIR}/assets`,
   "${auth_xuid}": "",
   "${user_type}": "legacy",
   "${version_name}": selectedVersion.id,
