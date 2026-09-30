@@ -5,56 +5,75 @@ import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as readline from "node:readline/promises";
-import { writeFile, mkdir, readFile } from "node:fs/promises";
+import { writeFile, mkdir, readFile, readdir } from "node:fs/promises";
 //--------- main settings
 
 const JAVA_PATH = "java";
 const BASE_DIR = import.meta.dirname;
 const MINECRAFT_DIR = path.join(BASE_DIR, ".minecraft");
-const MANIFEST_URL ="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+const MANIFEST_URL =
+  "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const ASSETS_URL = "https://resources.download.minecraft.net";
 const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
 const ASSET_DOWNLOAD_LIMIT = 16;
 
 //--------- Platform / Rules / concurrency limit function /check downloading function / check if the sha1 valid GlobalFunctions
 const platform = os.platform();
-const minecraftPlatform =platform == "win32"? "windows" : platform == "darwin"? "osx": platform == "linux"? "linux": null;
+const minecraftPlatform =
+  platform == "win32"
+    ? "windows"
+    : platform == "darwin"
+      ? "osx"
+      : platform == "linux"
+        ? "linux"
+        : null;
 if (!minecraftPlatform) {
   console.log("Your OS is not supported");
   process.exit(1);
 }
-const nativeExtension =platform == "win32" ? ".dll": platform == "darwin"   ? ".dylib"   : platform == "linux"  ? ".so" : null;
+const nativeExtension =
+  platform == "win32"
+    ? ".dll"
+    : platform == "darwin"
+      ? ".dylib"
+      : platform == "linux"
+        ? ".so"
+        : null;
 const ARCH_MAP = { x64: "x86_64", ia32: "x86", arm64: "arm64" };
 const minecraftArch = ARCH_MAP[process.arch];
 
 // function that fetch all version to show for the user
-let allVersions;
 
 async function fetchAllVersions(isLocal) {
+  let shownVersions;
 
-  const response = await checkDownloading(MANIFEST_URL);
-  allVersions = await response.json();
-  let shownVersions =allVersions.versions;
-if(Number(isLocal)===1){
-   shownVersions =allVersions.versions.filter((version)=>{
-    return existsSync(path.join(MINECRAFT_DIR,"versions",version.id,`${version.id}.json`))
-  })
-}
-else if(Number(isLocal)!==2){
-  console.log("Invalid input");
+  if (Number(isLocal) === 1) {
+    const installedIds = await getInstalledVersions();
+    shownVersions = installedIds.map((id) => {
+      return { id: id, type: "installed" };
+    });
+  } else if (Number(isLocal) === 2) {
+    const response = await checkDownloading(MANIFEST_URL);
+    const manifest = await response.json();
+    shownVersions = manifest.versions;
+  } else {
+    console.log("Invalid input");
     process.exit(1);
-
   }
+
+  if (shownVersions.length === 0) {
+    console.log("No versions found");
+    process.exit(1);
+  }
+
   let i = 1;
   shownVersions.map((version) => {
     console.log(`${i}-version:${version.id} : type:${version.type}`);
     i++;
   });
-  
-
   return shownVersions;
 }
-// fucntions is allowed just takes rules and returns the boolean 
+// fucntions is allowed just takes rules and returns the boolean
 // that we depend on to determine what files your system needs based on the arch
 function isAllowed(rules) {
   if (!rules) return true;
@@ -135,7 +154,6 @@ function getOfflineUUID(username) {
   return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}`;
 }
 
-
 // function that has regex replaces the arguments ${im here} replaces im here with the replacements table
 function applyReplacements(argument) {
   return argument.replace(/\$\{(\w+)\}/g, (placeholder) => {
@@ -153,17 +171,26 @@ async function getVersionJson(versionUrl) {
 // download client jar lol you could tell
 async function downloadClientJar(clientUrl) {
   if (
-    await checkSha1(`${versionDir}/${selectedVersion.id}.jar`, versionJson.downloads.client.sha1)
+    await checkSha1(
+      `${jarPath}`,
+      versionJson.downloads.client.sha1,
+    )
   )
-    return console.log(`the file exists at:${versionDir}/${selectedVersion.id}.jar`);
-  console.log(`Downloading: ${versionDir}/${selectedVersion.id}.jar`);
+    return console.log(
+      `the file exists at:${jarPath}`,
+    );
+  console.log(`Downloading: ${jarPath}`);
   const response = await checkDownloading(clientUrl);
   const jarFile = await response.arrayBuffer();
-  await writeFile(`${versionDir}/${selectedVersion.id}.jar`, Buffer.from(jarFile));
+  await writeFile(
+    `${jarPath}`,
+    Buffer.from(jarFile),
+  );
   return jarFile;
 }
 // download library
 async function downloadLibrary(file) {
+  if (!file.url) return console.log(`local library: ${file.path}`);
   const libUrl = file.url;
   const path = file.path;
   if (await checkSha1(`${MINECRAFT_DIR}/libraries/${path}`, file.sha1))
@@ -186,7 +213,7 @@ async function getAssetIndex(assetUrl) {
   const assetIndex = await response.json();
   return assetIndex;
 }
-// download asset 
+// download asset
 async function downloadAsset(hash, path) {
   if (
     await checkSha1(
@@ -219,10 +246,46 @@ async function downloadOneAsset(item) {
   const asset = item[1];
   return downloadAsset(asset.hash, path);
 }
+
+// returns the name of folders in directory
+async function getInstalledVersions() {
+  const versionsDir = path.join(MINECRAFT_DIR, "versions");
+  if (!existsSync(versionsDir)) return [];
+  const allFolders = await readdir(versionsDir);
+  return allFolders.filter((id) => {
+    return existsSync(path.join(versionsDir, id, `${id}.json`));
+  });
+}
+
+// child (fabric/forge) + parent (vanilla)
+function mergeVersionJson(parentJson, childJson) {
+  const merged = { ...parentJson, ...childJson };
+  merged.libraries = [...childJson.libraries, ...parentJson.libraries];
+  if (parentJson.arguments) {
+    merged.arguments = {
+      jvm: [
+        ...(parentJson.arguments.jvm ?? []),
+        ...(childJson.arguments?.jvm ?? []),
+      ],
+      game: [
+        ...(parentJson.arguments.game ?? []),
+        ...(childJson.arguments?.game ?? []),
+      ],
+    };
+  }
+    else {
+    delete merged.arguments;
+  }
+  return merged;
+}
+function mavenToPath(name) {
+  const parts = name.split(":");
+  const group = parts[0].replaceAll(".", "/");
+  const artifact = parts[1];
+  const version = parts[2];
+  return `${group}/${artifact}/${version}/${artifact}-${version}.jar`;
+}
 //--------- fetching all version numbers and their types
-
-
-
 
 // the questions
 const rl = readline.createInterface({
@@ -231,9 +294,13 @@ const rl = readline.createInterface({
 });
 
 // wait for the upgrade
-const isLocal = await rl.question(" 1-wanna run installed version \n 2-wanna install new version \n your choice:")
+const isLocal = await rl.question(
+  " 1-wanna run installed version \n 2-wanna install new version \n your choice:",
+);
 const shownVersions = await fetchAllVersions(isLocal);
-const versionAnswer = await rl.question("Which version do u wanna install /play ? ");
+const versionAnswer = await rl.question(
+  "Which version do u wanna install /play ? ",
+);
 
 const selectedVersion = shownVersions[Number(versionAnswer) - 1];
 if (!selectedVersion) {
@@ -263,23 +330,56 @@ if (!Number.isInteger(memNumber) || memNumber < 1 || memNumber > 32) {
 console.log(`you have set the max memory usage to -Xmx${memNumber}G `);
 await rl.question("press enter to continue");
 rl.close();
-// path.resolve actually will connect them all 
+// path.resolve actually will connect them all
 const versionDir = path.join(MINECRAFT_DIR, "versions", selectedVersion.id);
-const gameDir = MINECRAFT_DIR;
-const versionJson = await getVersionJson(selectedVersion.url);
+const gameDir = path.join(MINECRAFT_DIR, "instances", selectedVersion.id);
+let versionJson;
+if (selectedVersion.url) {
+  versionJson = await getVersionJson(selectedVersion.url);
+} else {
+  const jsonPath = path.join(
+    MINECRAFT_DIR,
+    "versions",
+    selectedVersion.id,
+    `${selectedVersion.id}.json`,
+  );
+  versionJson = JSON.parse(await readFile(jsonPath, "utf8"));
+}
+// merge block
+let jarId = selectedVersion.id;
+if (versionJson.inheritsFrom) {
+  const parentId = versionJson.inheritsFrom;
+  const parentPath = path.join(MINECRAFT_DIR, "versions", parentId, `${parentId}.json`);
+  if (!existsSync(parentPath)) {
+    console.log(`${selectedVersion.id} needs ${parentId}, install it first (option 2)`);
+    process.exit(1);
+  }
+  const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
+  versionJson = mergeVersionJson(parentJson, versionJson);
+  jarId = parentId;
+}
+const jarPath = path.join(MINECRAFT_DIR, "versions", jarId, `${jarId}.jar`);
+// -----
 const requiredJava = versionJson.javaVersion?.majorVersion ?? 8;
 console.log("Required Java:", requiredJava);
 const offlineUUID = getOfflineUUID(username);
 //--------- Version
 
-
-
-
-
 const libFiles = [];
 for (const lib of versionJson.libraries) {
   // new technique early Exit reduce code complexity
   if (!isAllowed(lib.rules)) continue;
+  if (!lib.downloads) {
+    const baseUrl = lib.url ?? "https://libraries.minecraft.net/";
+    const libPath = mavenToPath(lib.name);
+    libFiles.push({
+      path: libPath,
+      url: baseUrl + libPath,
+      sha1: lib.sha1,
+      isNative: false,
+    });
+    continue;
+  }
   if (lib.downloads?.artifact) {
     const libArtifact = lib.downloads.artifact;
     const file = {
@@ -304,7 +404,6 @@ for (const lib of versionJson.libraries) {
 }
 //--------- Java Check
 
-
 const installedJava = getInstalledJavaVersion(JAVA_PATH);
 console.log("Installed Java:", installedJava);
 if (installedJava === null) {
@@ -323,12 +422,24 @@ if (installedJava < requiredJava) {
 
 //--------- Client.jar
 await mkdir(versionDir, { recursive: true });
-await writeFile(`${versionDir}/${selectedVersion.id}.json`, JSON.stringify(versionJson));
+await mkdir(gameDir, { recursive: true });
+// launcher json for other instances
+const profilesPath = path.join(MINECRAFT_DIR, "launcher_profiles.json");
+if (!existsSync(profilesPath)) {
+  await writeFile(profilesPath, JSON.stringify({ profiles: {} }));
+}
+//----
+
+if (selectedVersion.url) {
+  await writeFile(
+    `${versionDir}/${selectedVersion.id}.json`,
+    JSON.stringify(versionJson),
+  );
+}
+
 await downloadClientJar(versionJson.downloads.client.url);
 
 //--------- Libraries
-
-
 
 await limiter(downloadLibrary, libFiles, LIBRARY_FILES_DOWNLOAD_LIMIT);
 
@@ -351,8 +462,8 @@ const nativeLibFiles = libFiles.filter((file) => file.isNative);
 //--------- Extraction
 // make all the natives from .jar (zipped data) to .so files and more
 for (const native of nativeLibFiles) {
-  const jarPath = native.path;
-  const zip = new AdmZip(`${MINECRAFT_DIR}/libraries/${jarPath}`);
+  const nativeJarPath= native.path;
+  const zip = new AdmZip(`${MINECRAFT_DIR}/libraries/${nativeJarPath}`);
 
   const entries = zip.getEntries();
   const filesWithoutFolders = entries.filter((entry) => {
@@ -375,7 +486,7 @@ for (const native of nativeLibFiles) {
 const libPaths = libFiles.map((file) => {
   return `${MINECRAFT_DIR}/libraries/${file.path}`;
 });
-const classpath = [`${versionDir}/${selectedVersion.id}.jar`, ...libPaths];
+const classpath = [`${jarPath}`, ...libPaths];
 const classpathValue = classpath.join(path.delimiter);
 console.log("-----------------------------------------------");
 
@@ -424,6 +535,8 @@ if (versionJson.arguments) {
 }
 //--------- Replacements
 const replacements = {
+  "${library_directory}": `${MINECRAFT_DIR}/libraries`,
+"${classpath_separator}": path.delimiter,
   "${user_properties}": "{}",
   "${classpath}": classpathValue,
   "${natives_directory}": `${versionDir}/natives`,
