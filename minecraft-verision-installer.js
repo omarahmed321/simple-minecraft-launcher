@@ -285,6 +285,15 @@ function mavenToPath(name) {
   const version = parts[2];
   return `${group}/${artifact}/${version}/${artifact}-${version}.jar`;
 }
+
+// returns the number of the version in the list
+async function getVersionNumberInList(versionId) {
+  const response = await checkDownloading(MANIFEST_URL);
+  const manifest = await response.json();
+  const index = manifest.versions.findIndex((version) => version.id === versionId);
+  if (index === -1) return "unknown version";
+  return index + 1;
+}
 //--------- fetching all version numbers and their types
 
 // the questions
@@ -351,7 +360,8 @@ if (versionJson.inheritsFrom) {
   const parentId = versionJson.inheritsFrom;
   const parentPath = path.join(MINECRAFT_DIR, "versions", parentId, `${parentId}.json`);
   if (!existsSync(parentPath)) {
-    console.log(`${selectedVersion.id} needs ${parentId}, install it first (option 2)`);
+    const versionNumberList = await getVersionNumberInList(parentId);
+    console.log(`${selectedVersion.id} needs ${parentId} number in list =${versionNumberList}, install it first (option 2)`);
     process.exit(1);
   }
   const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
