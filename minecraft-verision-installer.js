@@ -5,7 +5,13 @@ import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as readline from "node:readline/promises";
-import { writeFile, mkdir, readFile, readdir } from "node:fs/promises";
+import {
+  writeFile,
+  mkdir,
+  readFile,
+  readdir,
+  copyFile,
+} from "node:fs/promises";
 //--------- main settings
 
 const JAVA_PATH = "java";
@@ -16,6 +22,10 @@ const MANIFEST_URL =
 const ASSETS_URL = "https://resources.download.minecraft.net";
 const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
 const ASSET_DOWNLOAD_LIMIT = 16;
+const JAVA_SEARCH_DIRS = [
+  "/usr/lib/jvm",
+  "C:\\Program Files\\Eclipse Adoptium",
+];
 
 //--------- Platform / Rules / concurrency limit function /check downloading function / check if the sha1 valid GlobalFunctions
 const platform = os.platform();
@@ -170,22 +180,12 @@ async function getVersionJson(versionUrl) {
 }
 // download client jar lol you could tell
 async function downloadClientJar(clientUrl) {
-  if (
-    await checkSha1(
-      `${jarPath}`,
-      versionJson.downloads.client.sha1,
-    )
-  )
-    return console.log(
-      `the file exists at:${jarPath}`,
-    );
+  if (await checkSha1(`${jarPath}`, versionJson.downloads.client.sha1))
+    return console.log(`the file exists at:${jarPath}`);
   console.log(`Downloading: ${jarPath}`);
   const response = await checkDownloading(clientUrl);
   const jarFile = await response.arrayBuffer();
-  await writeFile(
-    `${jarPath}`,
-    Buffer.from(jarFile),
-  );
+  await writeFile(`${jarPath}`, Buffer.from(jarFile));
   return jarFile;
 }
 // download library
@@ -272,8 +272,7 @@ function mergeVersionJson(parentJson, childJson) {
         ...(childJson.arguments?.game ?? []),
       ],
     };
-  }
-    else {
+  } else {
     delete merged.arguments;
   }
   return merged;
@@ -290,9 +289,25 @@ function mavenToPath(name) {
 async function getVersionNumberInList(versionId) {
   const response = await checkDownloading(MANIFEST_URL);
   const manifest = await response.json();
-  const index = manifest.versions.findIndex((version) => version.id === versionId);
+  const index = manifest.versions.findIndex(
+    (version) => version.id === versionId,
+  );
   if (index === -1) return "unknown version";
   return index + 1;
+}
+
+// looks for an installed java with the exact major version, falls back to JAVA_PATH
+async function findJava(requiredJava) {
+  const javaFile = platform === "win32" ? "java.exe" : "java";
+  for (const baseDir of JAVA_SEARCH_DIRS) {
+    if (!existsSync(baseDir)) continue;
+    for (const folder of await readdir(baseDir)) {
+      const javaPath = path.join(baseDir, folder, "bin", javaFile);
+      if (!existsSync(javaPath)) continue;
+      if (getInstalledJavaVersion(javaPath) === requiredJava) return javaPath;
+    }
+  }
+  return JAVA_PATH;
 }
 //--------- fetching all version numbers and their types
 
@@ -358,10 +373,17 @@ if (selectedVersion.url) {
 let jarId = selectedVersion.id;
 if (versionJson.inheritsFrom) {
   const parentId = versionJson.inheritsFrom;
-  const parentPath = path.join(MINECRAFT_DIR, "versions", parentId, `${parentId}.json`);
+  const parentPath = path.join(
+    MINECRAFT_DIR,
+    "versions",
+    parentId,
+    `${parentId}.json`,
+  );
   if (!existsSync(parentPath)) {
     const versionNumberList = await getVersionNumberInList(parentId);
-    console.log(`${selectedVersion.id} needs ${parentId} number in list =${versionNumberList}, install it first (option 2)`);
+    console.log(
+      `${selectedVersion.id} needs ${parentId} number in list =${versionNumberList}, install it first (option 2)`,
+    );
     process.exit(1);
   }
   const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
@@ -414,11 +436,12 @@ for (const lib of versionJson.libraries) {
 }
 //--------- Java Check
 
-const installedJava = getInstalledJavaVersion(JAVA_PATH);
+const javaPath = await findJava(requiredJava);
+const installedJava = getInstalledJavaVersion(javaPath);
 console.log("Installed Java:", installedJava);
 if (installedJava === null) {
   console.log(
-    `Java not found at "${JAVA_PATH}". Install Java ${requiredJava} and try again.`,
+    `Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`,
   );
   process.exit(1);
 }
@@ -448,6 +471,12 @@ if (selectedVersion.url) {
 }
 
 await downloadClientJar(versionJson.downloads.client.url);
+// forge ignores the game jar only if it has the version's own name
+let classpathJar = jarPath;
+if (jarId !== selectedVersion.id) {
+  classpathJar = path.join(versionDir, `${selectedVersion.id}.jar`);
+  await copyFile(jarPath, classpathJar);
+}
 
 //--------- Libraries
 
@@ -472,7 +501,7 @@ const nativeLibFiles = libFiles.filter((file) => file.isNative);
 //--------- Extraction
 // make all the natives from .jar (zipped data) to .so files and more
 for (const native of nativeLibFiles) {
-  const nativeJarPath= native.path;
+  const nativeJarPath = native.path;
   const zip = new AdmZip(`${MINECRAFT_DIR}/libraries/${nativeJarPath}`);
 
   const entries = zip.getEntries();
@@ -496,7 +525,7 @@ for (const native of nativeLibFiles) {
 const libPaths = libFiles.map((file) => {
   return `${MINECRAFT_DIR}/libraries/${file.path}`;
 });
-const classpath = [`${jarPath}`, ...libPaths];
+const classpath = [classpathJar, ...libPaths];
 const classpathValue = classpath.join(path.delimiter);
 console.log("-----------------------------------------------");
 
@@ -546,7 +575,7 @@ if (versionJson.arguments) {
 //--------- Replacements
 const replacements = {
   "${library_directory}": `${MINECRAFT_DIR}/libraries`,
-"${classpath_separator}": path.delimiter,
+  "${classpath_separator}": path.delimiter,
   "${user_properties}": "{}",
   "${classpath}": classpathValue,
   "${natives_directory}": `${versionDir}/natives`,
@@ -578,7 +607,7 @@ const javaArguments = [
 ];
 
 //--------- Launch
-const minecraft = spawn(JAVA_PATH, javaArguments);
+const minecraft = spawn(javaPath, javaArguments);
 
 minecraft.stdout.on("data", (data) => {
   console.log("OUT:", data.toString());
