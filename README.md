@@ -124,9 +124,10 @@ The Forge installer checks the SHA1 of the files it builds. With a newer Java th
 |---|---|
 | Fabric 26.3 | Tested and working |
 | Forge 26.3 | Tested and working |
-| Forge 1.17 to 1.21.x | Supported (same format as Forge 26.3, needs the jar rename fix above) |
+| Forge 1.20.1 | Tested and working (with Java 17) |
+| Forge 1.17 to 1.21.x | Supported (same format as Forge 1.20.1) |
 | Forge 1.12.2 | Tested and working (with Java 8) |
-| Forge 1.16.5 | Supported with Java 8 installed |
+| Forge 1.16.5 | Tested and working (with Java 8) |
 | NeoForge | Supported (same format as modern Forge) |
 | Forge 1.6 and older | Not supported (it modifies the game jar directly) |
 
