@@ -27,7 +27,7 @@ const JAVA_SEARCH_DIRS = [
   "C:\\Program Files\\Eclipse Adoptium",
 ];
 
-//--------- Platform / Rules / concurrency limit function /check downloading function / check if the sha1 valid GlobalFunctions
+//--------- Platform 
 const platform = os.platform();
 const minecraftPlatform =
   platform == "win32"
@@ -145,8 +145,8 @@ function getInstalledJavaVersion(javaPath) {
   if (!versionText) return null;
 
   const parts = versionText.split(".");
-  if (parts[0] === "1") return Number(parts[1]);
-  return Number(parts[0]);
+  if (parts[0] === "1") return parseInt(parts[1]);
+  return parseInt(parts[0]);
 }
 
 //  function makes a 128 bit hash uuid for every different user
@@ -318,7 +318,7 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-// wait for the upgrade
+
 const isLocal = await rl.question(
   " 1-wanna run installed version \n 2-wanna install new version \n your choice:",
 );
@@ -608,7 +608,7 @@ const javaArguments = [
 ];
 
 //--------- Launch
-const minecraft = spawn(javaPath, javaArguments);
+const minecraft = spawn(javaPath, javaArguments, { cwd: gameDir });
 
 minecraft.stdout.on("data", (data) => {
   console.log("OUT:", data.toString());
