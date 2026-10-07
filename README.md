@@ -89,7 +89,9 @@ The launcher is a single script that runs these stages in order:
 | 1.17 to 1.20.4 | Tested and working | 17 |
 | 1.13 to 1.16.5 | Tested and working (legacy natives) | 8 |
 | 1.7.10 to 1.12.2 | Tested and working (legacy natives and legacy arguments) | 8 |
-| Older than 1.7.3, beta, and alpha | Not supported (they use an older asset system) | |
+| Classic, Indev, Infdev, Alpha, Beta, and 1.0 to 1.7.2 | Tested and working (sounds may be missing, see below) | 8 |
+
+Every official version runs, from Classic 0.30 to the latest snapshot. Versions older than 1.7.3 store sounds in an older asset layout (`resources/` or `assets/virtual/legacy/`) that the launcher does not build yet, so the game starts and plays but some sounds can be missing.
 
 Vanilla versions also run on a newer Java than they ask for. Old Forge versions do not, which is why the launcher picks the exact version.
 
