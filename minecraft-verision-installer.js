@@ -307,6 +307,7 @@ async function findJava(requiredJava) {
       if (getInstalledJavaVersion(javaPath) === requiredJava) return javaPath;
     }
   }
+     console.log(`Java ${requiredJava} not found, using default java instead`);
   return JAVA_PATH;
 }
 //--------- fetching all version numbers and their types
