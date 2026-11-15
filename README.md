@@ -268,6 +268,7 @@ The settings are constants at the top of `minecraft-verision-installer.js`, unde
 | `ASSET_DOWNLOAD_LIMIT` | `16` | How many asset files download at the same time. Lower both limits on a slow or unstable connection. |
 | `INTRO_ANIMATION_TIME` | `1500` | How long the "made by Omar" rainbow moves at startup, in milliseconds. `0` turns it off. |
 | `OUTRO_ANIMATION_TIME` | `1500` | How long the "Yo Have Fun" rainbow moves before the game starts, in milliseconds. `0` turns it off. |
+| `BAR_SIZE` | `50` | Width of the download progress bar, in characters. Lower it if the bar line wraps in a narrow terminal. |
 
 With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second.
 
@@ -336,7 +337,6 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | `downloadClientJar`, `downloadLibrary`, `getAssetIndex`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
-| `logAboveBar(text)` | Prints a line above the progress bar without breaking it |
 | `showAnimatedText(text, time)` | Shows text with a moving rainbow for `time` milliseconds, or as plain text when `time` is `0` |
 
 ---

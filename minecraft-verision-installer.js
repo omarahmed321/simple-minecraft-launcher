@@ -29,7 +29,7 @@ const INTRO_ANIMATION_TIME = 1500;
 const OUTRO_ANIMATION_TIME =1500;
 
 // the downloading bar size
-const BAR_SIZE = 20;
+const BAR_SIZE = 50;
 
 //---- logo and colors
 const LOGO = [
@@ -132,7 +132,7 @@ function isAllowed(rules) {
 async function limiter(worker, assets, limit, title) {
   let turn = 0;
   let done=0;
-    const bar = p.progress({ max: assets.length, size: 20 });
+    const bar = p.progress({ max: assets.length, size: BAR_SIZE });
   bar.start(title);
   async function runner() {
     while (turn < assets.length) {
@@ -140,7 +140,7 @@ async function limiter(worker, assets, limit, title) {
       turn++;
       await worker(asset);
         done++;
-      bar.advance(1, `${title} ${done}/${assets.length}`);
+      bar.advance(1, `${title} ${done}/${assets.length} ${asset.path ?? asset[0]}`);
     }
   }
   const runners = [];
@@ -226,12 +226,12 @@ p.log.step("Downloading client jar");
 }
 // download library
 async function downloadLibrary(file) {
- if (!file.url) return logAboveBar(`local library: ${file.path}`);
+ if (!file.url) return;
   const libUrl = file.url;
   const path = file.path;
   if (await checkSha1(`${MINECRAFT_DIR}/libraries/${path}`, file.sha1))
-   return logAboveBar(`the file exists: ${MINECRAFT_DIR}/libraries/${path}`);
-  logAboveBar(`Downloading: ${path}`);
+   return ;
+ 
   const response = await checkDownloading(libUrl);
   const jarFile = await response.arrayBuffer();
   await mkdir(
@@ -256,10 +256,8 @@ async function downloadAsset(hash, path) {
       hash,
     )
   )
-    return logAboveBar(
-      `the file exists:${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
-    );
-    logAboveBar(`Downloading: ${path}`);
+    return ;
+    
 
   const response = await checkDownloading(
     `${ASSETS_URL}/${hash.substring(0, 2)}/${hash}`,
@@ -345,9 +343,7 @@ async function showAnimatedText(text, time) {
   animation.stop();
 }
 // prints a line above the progress bar without breaking it
-function logAboveBar(text) {
-  process.stdout.write(`\r\x1b[2K│  ${text}\n`);
-}
+
 
 //--------- fetching all version numbers and their types
 
