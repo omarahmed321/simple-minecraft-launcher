@@ -25,8 +25,8 @@ const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
 const ASSET_DOWNLOAD_LIMIT = 16;
 
 // the time of  animation chromatic "made by omar animation" and "have fun"  in milliseconds
-const INTRO_ANIMATION_TIME = 0;
-const OUTRO_ANIMATION_TIME =0;
+const INTRO_ANIMATION_TIME = 1500;
+const OUTRO_ANIMATION_TIME =1500;
 
 // the downloading bar size
 const BAR_SIZE = 20;
