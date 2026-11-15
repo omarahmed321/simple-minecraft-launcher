@@ -29,7 +29,10 @@ const INTRO_ANIMATION_TIME = 1500;
 const OUTRO_ANIMATION_TIME =1500;
 
 // the downloading bar size
-const BAR_SIZE = 50;
+const BAR_SIZE = 20;
+
+// bar rendering delay
+const BAR_RENDERING_DELAY =16;
 
 //---- logo and colors
 const LOGO = [
@@ -132,7 +135,7 @@ function isAllowed(rules) {
 async function limiter(worker, assets, limit, title) {
   let turn = 0;
   let done=0;
-    const bar = p.progress({ max: assets.length, size: BAR_SIZE });
+    const bar = p.progress({ max: assets.length, size: BAR_SIZE,delay:BAR_RENDERING_DELAY });
   bar.start(title);
   async function runner() {
     while (turn < assets.length) {
@@ -140,7 +143,7 @@ async function limiter(worker, assets, limit, title) {
       turn++;
       await worker(asset);
         done++;
-      bar.advance(1, `${title} ${done}/${assets.length} ${asset.path ?? asset[0]}`);
+      bar.advance(1, `${title} ${done}/${assets.length} ${path.basename(asset.path ?? asset[0])}`);
     }
   }
   const runners = [];

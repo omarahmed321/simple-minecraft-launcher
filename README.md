@@ -268,7 +268,8 @@ The settings are constants at the top of `minecraft-verision-installer.js`, unde
 | `ASSET_DOWNLOAD_LIMIT` | `16` | How many asset files download at the same time. Lower both limits on a slow or unstable connection. |
 | `INTRO_ANIMATION_TIME` | `1500` | How long the "made by Omar" rainbow moves at startup, in milliseconds. `0` turns it off. |
 | `OUTRO_ANIMATION_TIME` | `1500` | How long the "Yo Have Fun" rainbow moves before the game starts, in milliseconds. `0` turns it off. |
-| `BAR_SIZE` | `50` | Width of the download progress bar, in characters. Lower it if the bar line wraps in a narrow terminal. |
+| `BAR_SIZE` | `20` | Width of the download progress bar, in characters. If the bar repeats on new lines instead of updating in place, the line is wider than your terminal: lower this or widen the window. |
+| `BAR_RENDERING_DELAY` | `16` | How often the progress bar is redrawn, in milliseconds. Lower values do not download faster; 16 is about 60 redraws per second. |
 
 With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second.
 
