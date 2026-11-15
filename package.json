@@ -11,6 +11,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "adm-zip": "^0.6.1"
+    "@clack/prompts": "^1.9.0",
+    "adm-zip": "^0.6.1",
+    "chalk-animation": "^2.0.3"
   }
 }

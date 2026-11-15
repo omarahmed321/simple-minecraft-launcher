@@ -4,7 +4,9 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import * as readline from "node:readline/promises";
+import { setTimeout as sleep } from "node:timers/promises";
+
+import * as p from "@clack/prompts";
 import {
   writeFile,
   mkdir,
@@ -12,20 +14,53 @@ import {
   readdir,
   copyFile,
 } from "node:fs/promises";
-//--------- main settings
 
+
+//--------- main settings 
+//---- user can edit
+// java path if u wanna specific one
 const JAVA_PATH = "java";
+
+// when installing how much files u wanna installing parallel
+const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
+const ASSET_DOWNLOAD_LIMIT = 16;
+
+// the time of  animation chromatic "made by omar animation" and "have fun"  in milliseconds
+const INTRO_ANIMATION_TIME = 1500;
+const OUTRO_ANIMATION_TIME =1500;
+
+
+//---- logo and colors
+const LOGO = [
+  "███████╗██╗     ",
+  "██╔════╝██║     ",
+  "███████╗██║     ",
+  "╚════██║██║     ",
+  "███████║███████╗",
+  "╚══════╝╚══════╝",
+];
+const PURPLE = "\x1b[38;2;166;120;240m";
+const RESET = "\x1b[39m";
+
+
+// don't edit it
 const BASE_DIR = import.meta.dirname;
 const MINECRAFT_DIR = path.join(BASE_DIR, ".minecraft");
 const MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const ASSETS_URL = "https://resources.download.minecraft.net";
-const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
-const ASSET_DOWNLOAD_LIMIT = 16;
+
 const JAVA_SEARCH_DIRS = [
   "/usr/lib/jvm",
   "C:\\Program Files\\Eclipse Adoptium",
 ];
+
+
+//--------- intro  lines with clack 
+console.log(PURPLE + LOGO.join("\n") + RESET);   
+await showAnimatedText("made by Omar", INTRO_ANIMATION_TIME);
+console.log();
+p.intro("Simple launcher");
 
 //--------- Platform 
 const platform = os.platform();
@@ -76,11 +111,7 @@ async function fetchAllVersions(isLocal) {
     process.exit(1);
   }
 
-  let i = 1;
-  shownVersions.map((version) => {
-    console.log(`${i}-version:${version.id} : type:${version.type}`);
-    i++;
-  });
+
   return shownVersions;
 }
 // fucntions is allowed just takes rules and returns the boolean
@@ -310,51 +341,88 @@ async function findJava(requiredJava) {
      console.log(`Java ${requiredJava} not found, using default java instead`);
   return JAVA_PATH;
 }
+// shows text with a moving rainbow, or as plain text when time is 0
+async function showAnimatedText(text, time) {
+  if (time === 0) return console.log(text);
+
+  const { default: chalkAnimation } = await import("chalk-animation");
+  const animation = chalkAnimation.rainbow(text);
+  await sleep(time);
+  animation.stop();
+}
+
 //--------- fetching all version numbers and their types
 
 // the questions
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
 
 
-const isLocal = await rl.question(
-  " 1-wanna run installed version \n 2-wanna install new version \n your choice:",
-);
-const shownVersions = await fetchAllVersions(isLocal);
-const versionAnswer = await rl.question(
-  "Which version do u wanna install /play ? ",
-);
 
-const selectedVersion = shownVersions[Number(versionAnswer) - 1];
-if (!selectedVersion) {
-  console.log("Invalid number");
-  process.exit(1);
+const isLocal = await p.select({
+  message: "What do you wanna do ?",
+  options:[
+    {value:1,label:"run an installed version"},
+    {value:2, label:"install new version "}
+  ],
+
+})
+if(p.isCancel(isLocal)){
+  p.cancel("Cancelled");
+  process.exit(0);
 }
+const shownVersions = await fetchAllVersions(isLocal);
+const selectedVersion = await p.autocomplete({
+message :"Choose version:",
+placeholder:"write here the version",
+maxItems:8,
+ options: shownVersions.map((version) => ({
+    value: version,
+    label: version.id,
+    hint: version.type,
+  })),
+})
+if(p.isCancel(selectedVersion)){
+  p.cancel("Cancelled")
+  process.exit(0)
+}
+
 console.log("You chose:", selectedVersion.id, selectedVersion.type);
 
-const username = await rl.question("The name of the user in the game? ");
-// regex to check he enters valid one
-if (!/^\w{3,16}$/.test(username)) {
-  console.log(
-    "username must be 3-16 characters, letters, numbers, and u can use _",
-  );
-  process.exit(1);
+const username = await p.text({
+  message: "The name of the user in the game?",
+  placeholder: "Steve",
+  validate: (value) => {
+    if (!/^\w{3,16}$/.test(value)) {
+      return "username must be 3-16 characters, letters, numbers, and u can use _";
+    }
+  },
+});
+if (p.isCancel(username)) {
+  p.cancel("Cancelled");
+  process.exit(0);
 }
+
 console.log(`username is ${username} `);
-const memAnswer = await rl.question(
-  "How much memory u wanna the game allocate (write number for example 3)? ",
-);
+
+
+const memAnswer = await p.text({
+  message: "How much memory u wanna the game allocate (write number for example 3)?",
+  placeholder: "3",
+  validate: (value) => {
+    // transforming value to number cuz the spaces
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < 1 || number > 32) {
+      return "Memory must be a whole number between 1 and 32";
+    }
+  },
+});
+if (p.isCancel(memAnswer)) {
+  p.cancel("Cancelled");
+  process.exit(0);
+}
 // transforming memAnswer to number cuz the spaces
 const memNumber = Number(memAnswer);
-if (!Number.isInteger(memNumber) || memNumber < 1 || memNumber > 32) {
-  console.log("Memory must be a whole number between 1 and 32");
-  process.exit(1);
-}
 console.log(`you have set the max memory usage to -Xmx${memNumber}G `);
-await rl.question("press enter to continue");
-rl.close();
+
 // path.resolve actually will connect them all
 const versionDir = path.join(MINECRAFT_DIR, "versions", selectedVersion.id);
 const gameDir = path.join(MINECRAFT_DIR, "instances", selectedVersion.id);
@@ -607,6 +675,10 @@ const javaArguments = [
   ...finalGameArguments,
 ];
 
+
+//--------- outro lines with clack
+p.outro("Launching");
+await showAnimatedText("Yo Have Fun", OUTRO_ANIMATION_TIME);
 //--------- Launch
 const minecraft = spawn(javaPath, javaArguments, { cwd: gameDir });
 

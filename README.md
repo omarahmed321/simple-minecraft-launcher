@@ -20,6 +20,7 @@ A **Minecraft: Java Edition** launcher written in **Node.js** that downloads any
 - [Tech Stack](#tech-stack)
 - [Run Locally](#run-locally)
 - [Usage](#usage)
+- [Settings](#settings)
 - [Troubleshooting](#troubleshooting)
 - [Code Structure](#code-structure)
 - [Project Structure](#project-structure)
@@ -39,7 +40,7 @@ The launcher is a single script that runs these stages in order:
 1. **Source**: Asks whether to run an **installed** version or **install a new** one.
    - **Installed**: Lists every folder in `.minecraft/versions/` that has a `<id>/<id>.json` file. This includes versions made by the Fabric, Forge, and NeoForge installers. Works without internet.
    - **New**: Downloads Mojang's version manifest and lists every version with its type (`release`, `snapshot`, `old_beta`, `old_alpha`).
-2. **Questions**: Asks for the version number, the in-game username, and the maximum memory in GB. Every answer is validated before anything is downloaded.
+2. **Questions**: Asks for the version (a searchable list), the in-game username, and the maximum memory in GB. Every answer is validated before anything is downloaded.
 3. **Version JSON**: Downloads the JSON for a new version, or reads it from disk for an installed one.
 4. **Merge (`inheritsFrom`)**: A mod loader JSON only lists what it adds and points to its base version with `inheritsFrom`. The launcher reads the base JSON and merges both into one: libraries and arguments are combined, `mainClass` comes from the mod loader, and the assets, client jar, and Java version come from the base. If the base version is missing, the launcher tells you its number in the "install new" list.
 5. **Library normalization**: Converts every library format into one list of `{ path, url, sha1, isNative }` entries:
@@ -74,7 +75,8 @@ The launcher is a single script that runs these stages in order:
 - **SHA1 verification**: Skips valid files and repairs missing or corrupted ones automatically.
 - **Concurrency limit**: Parallel downloads with a fixed number of workers.
 - **Safe downloads**: Stops with a clear message on any failed HTTP response.
-- **Input validation**: Checks the version number, username (3 to 16 characters: letters, numbers, `_`), and memory (1 to 32 GB).
+- **Terminal UI**: Arrow-key menus, a version list you can search by typing, and an animated rainbow intro.
+- **Input validation**: Checks the username (3 to 16 characters: letters, numbers, `_`) and memory (1 to 32 GB), and asks again instead of exiting when an answer is wrong.
 - **Cross-platform**: Detects Windows or Linux, picks the matching natives, and uses the correct classpath separator.
 - **Run from anywhere**: All paths are resolved from the script's own folder, so it works no matter which folder the terminal is in.
 - **One-command install**: A single line downloads the launcher (no Git needed), installs Node.js and every Java version, and starts it.
@@ -138,8 +140,11 @@ The Forge installer checks the SHA1 of the files it builds. With a newer Java th
 ## Tech Stack
 - **Runtime**: Node.js 22+ (ES modules, top-level `await`, built-in `fetch`)
 - **Language**: JavaScript
-- **Library**: [adm-zip](https://www.npmjs.com/package/adm-zip) to extract native files from `.jar` archives
-- **Node built-ins**: `fs`, `fs/promises`, `path`, `os`, `crypto`, `child_process`, `readline/promises`
+- **Libraries**:
+  - [adm-zip](https://www.npmjs.com/package/adm-zip) to extract native files from `.jar` archives
+  - [@clack/prompts](https://www.npmjs.com/package/@clack/prompts) for the menus, the searchable version list, and the text questions
+  - [chalk-animation](https://www.npmjs.com/package/chalk-animation) for the moving rainbow text (loaded only when the animation is on)
+- **Node built-ins**: `fs`, `fs/promises`, `path`, `os`, `crypto`, `child_process`, `timers/promises`
 - **Game runtime**: Java 8, 17, 21, and 25 (OpenJDK or Temurin)
 
 ---
@@ -214,28 +219,59 @@ npm start
 
 ## Usage
 ```
- 1-wanna run installed version
- 2-wanna install new version
- your choice:2
-1-version:26.4-snapshot-1 : type:snapshot
-2-version:26.3 : type:release
-...
-Which version do u wanna install /play ? 2
-The name of the user in the game? Omar
-How much memory u wanna the game allocate (write number for example 3)? 4
-press enter to continue
+███████╗██╗
+██╔════╝██║
+███████╗██║
+╚════██║██║
+███████║███████╗
+╚══════╝╚══════╝
+made by Omar
+
+┌  Simple launcher
+│
+◇  What do you wanna do ?
+│  install new version
+│
+◆  Choose version:
+│
+│  Search: 1.20█ (7 matches)
+│  ● 1.20.6 (release)
+│  ○ 1.20.5
+│  ○ 1.20.4
+│  ...
+│  ↑/↓ to select • Enter: confirm • Type: to search
+└
 ```
 
-1. **Source**: `1` for versions already in `.minecraft` (including Fabric, Forge, and NeoForge), `2` to download a new one.
-2. **Version number**: the number shown next to the version in the list.
+1. **Source**: pick with the arrow keys and press Enter. "run an installed version" lists what is already in `.minecraft` (including Fabric, Forge, and NeoForge); "install new version" downloads one.
+2. **Version**: type part of the version name to filter the list (for example `1.20`), move with the arrow keys, and press Enter.
 3. **Username**: 3 to 16 characters, using letters, numbers, and `_`.
 4. **Memory**: whole number of GB between 1 and 32 (passed to Java as `-Xmx<number>G`).
+
+If the username or memory is not valid, the launcher shows the reason and asks again. Press `Ctrl+C` at any question to exit.
 
 The first run of a version downloads the client, its libraries, and its assets. Later runs verify the files and start much faster. Mods go in `.minecraft/instances/<version>/mods/`, and worlds, logs, and settings are saved next to them.
 
 The launcher prints `Required Java` and `Installed Java` before starting, so you can see which Java it picked.
 
 **Offline mode:** The launcher does not sign in to a Microsoft account. Singleplayer and offline-mode servers work; Realms and servers that require authentication do not.
+
+---
+
+## Settings
+The settings are constants at the top of `minecraft-verision-installer.js`, under the `user can edit` comment. Open the file in any text editor, change a value, save, and run the launcher again.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `JAVA_PATH` | `"java"` | The Java used when the launcher cannot find the exact version a game needs. Set it to a full path to force a specific Java, for example `"/usr/lib/jvm/java-17-openjdk/bin/java"`. |
+| `LIBRARY_FILES_DOWNLOAD_LIMIT` | `8` | How many library files download at the same time. |
+| `ASSET_DOWNLOAD_LIMIT` | `16` | How many asset files download at the same time. Lower both limits on a slow or unstable connection. |
+| `INTRO_ANIMATION_TIME` | `1500` | How long the "made by Omar" rainbow moves at startup, in milliseconds. `0` turns it off. |
+| `OUTRO_ANIMATION_TIME` | `1500` | How long the "Yo Have Fun" rainbow moves before the game starts, in milliseconds. `0` turns it off. |
+
+With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second.
+
+Leave everything under the `don't edit it` comment as it is; those are the folders and download addresses the launcher depends on.
 
 ---
 
@@ -246,8 +282,9 @@ The launcher prints `Required Java` and `Installed Java` before starting, so you
 - **`Processor failed, invalid outputs`** (Forge installer): Run the installer with the matching Java (see [Mod Loaders](#mod-loaders)).
 - **`Module minecraft contains package ...`** (modern Forge): The game jar was not renamed. Make sure you are on the latest version of this branch.
 - **`'npm' is not recognized` (Windows)**: The new window did not get the updated PATH. Close it and double-click `run.bat`.
-- **`Cannot find package 'adm-zip'`**: Run `npm install` in the project folder.
-- **`Invalid number`** or **`No versions found`**: The number is not in the list, or there are no installed versions yet.
+- **`Cannot find package 'adm-zip'`**, **`'@clack/prompts'`**, or **`'chalk-animation'`**: Run `npm install` in the project folder. This also happens after updating an older copy of the launcher, because new libraries were added.
+- **`No versions found`**: There are no installed versions yet. Choose "install new version" first.
+- **The menus look broken or the arrow keys print letters**: Run the launcher in a real terminal window, not through a pipe or an editor's output panel.
 - **`lets say here that we are : 404 ...`**: A download failed or the connection dropped. Run the launcher again; files that were already verified are skipped.
 - **Game crashes with `UnsatisfiedLinkError`**: Delete `.minecraft/versions/<version>/natives` and run again so the natives are extracted fresh.
 
@@ -258,7 +295,8 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 
 | Section | Responsibility |
 |---|---|
-| **Settings** | `JAVA_PATH`, `BASE_DIR`, `MINECRAFT_DIR`, URLs, download limits, and `JAVA_SEARCH_DIRS` |
+| **Settings** | What the user can edit (`JAVA_PATH`, download limits, animation times), the logo and its colors, then `BASE_DIR`, `MINECRAFT_DIR`, URLs, and `JAVA_SEARCH_DIRS` |
+| **Intro** | Prints the logo, the animated "made by Omar" line, and opens the prompt frame |
 | **Platform** | Detects the OS, CPU architecture, and native file extension |
 | **Helpers** | Shared functions (table below) |
 | **Questions** | Installed or new, version, username, memory |
@@ -269,13 +307,13 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | **Libraries / Assets** | Downloads everything with the concurrency limit |
 | **Natives** | Extracts native files into `versions/<version>/natives/` |
 | **Classpath / Arguments / Replacements** | Builds the final Java command |
-| **Launch** | Starts Java and streams the game output |
+| **Outro / Launch** | Closes the prompt frame, plays the "Yo Have Fun" animation, then starts Java and streams the game output |
 
 **Helper functions:**
 
 | Function | Purpose |
 |---|---|
-| `fetchAllVersions(isLocal)` | Returns and prints the installed versions or Mojang's version list |
+| `fetchAllVersions(isLocal)` | Returns the installed versions or Mojang's version list |
 | `getInstalledVersions()` | Lists the folders in `versions/` that contain `<id>/<id>.json` |
 | `getVersionJson(url)` | Downloads a version JSON |
 | `mergeVersionJson(parent, child)` | Merges a mod loader JSON with its base version |
@@ -290,6 +328,7 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | `downloadClientJar`, `downloadLibrary`, `getAssetIndex`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
+| `showAnimatedText(text, time)` | Shows text with a moving rainbow for `time` milliseconds, or as plain text when `time` is `0` |
 
 ---
 
