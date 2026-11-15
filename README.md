@@ -281,6 +281,15 @@ Leave everything under the `don't edit it` comment as it is; those are the folde
 - **`<version> needs <base>, install it first`**: The mod loader's base version is missing. Install it with option 2, using the number printed in the message.
 - **`Processor failed, invalid outputs`** (Forge installer): Run the installer with the matching Java (see [Mod Loaders](#mod-loaders)).
 - **`Module minecraft contains package ...`** (modern Forge): The game jar was not renamed. Make sure you are on the latest version of this branch.
+- **`node: error while loading shared libraries: libsimdjson.so...`** (or another `lib...so` file): Node.js is installed but cannot start, because the system is only partly updated. This is common on Arch and CachyOS. Update the whole system, then run `./install.sh` again:
+
+  | System | Command |
+  |---|---|
+  | Arch / CachyOS | `sudo pacman -Syu` |
+  | Ubuntu / Debian | `sudo apt update && sudo apt upgrade` |
+  | Fedora | `sudo dnf upgrade` |
+
+  `install.sh` checks for this after installing and prints the command for your system.
 - **`'npm' is not recognized` (Windows)**: The new window did not get the updated PATH. Close it and double-click `run.bat`.
 - **`Cannot find package 'adm-zip'`**, **`'@clack/prompts'`**, or **`'chalk-animation'`**: Run `npm install` in the project folder. This also happens after updating an older copy of the launcher, because new libraries were added.
 - **`No versions found`**: There are no installed versions yet. Choose "install new version" first.
