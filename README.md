@@ -42,7 +42,7 @@ The launcher is a single script that runs these stages in order:
    - **New**: Downloads Mojang's version manifest and lists every version with its type (`release`, `snapshot`, `old_beta`, `old_alpha`).
 2. **Questions**: Asks for the version (a searchable list), the in-game username, and the maximum memory in GB. Every answer is validated before anything is downloaded.
 3. **Version JSON**: Downloads the JSON for a new version, or reads it from disk for an installed one.
-4. **Merge (`inheritsFrom`)**: A mod loader JSON only lists what it adds and points to its base version with `inheritsFrom`. The launcher reads the base JSON and merges both into one: libraries and arguments are combined, `mainClass` comes from the mod loader, and the assets, client jar, and Java version come from the base. If the base version is missing, the launcher tells you its number in the "install new" list.
+4. **Merge (`inheritsFrom`)**: A mod loader JSON only lists what it adds and points to its base version with `inheritsFrom`. The launcher reads the base JSON and merges both into one: libraries and arguments are combined, `mainClass` comes from the mod loader, and the assets, client jar, and Java version come from the base. If the base version is missing, the launcher names the version you need to install first.
 5. **Library normalization**: Converts every library format into one list of `{ path, url, sha1, isNative }` entries:
    - **Modern format** (1.19+): natives are separate libraries with an `artifact`.
    - **Legacy format** (before 1.19): natives live inside one library under `natives` and `downloads.classifiers`.
@@ -75,7 +75,7 @@ The launcher is a single script that runs these stages in order:
 - **SHA1 verification**: Skips valid files and repairs missing or corrupted ones automatically.
 - **Concurrency limit**: Parallel downloads with a fixed number of workers.
 - **Safe downloads**: Stops with a clear message on any failed HTTP response.
-- **Terminal UI**: Arrow-key menus, a version list you can search by typing, and an animated rainbow intro.
+- **Terminal UI**: Arrow-key menus, a version list you can search by typing, a progress bar while downloading, and an animated rainbow intro.
 - **Input validation**: Checks the username (3 to 16 characters: letters, numbers, `_`) and memory (1 to 32 GB), and asks again instead of exiting when an answer is wrong.
 - **Cross-platform**: Detects Windows or Linux, picks the matching natives, and uses the correct classpath separator.
 - **Run from anywhere**: All paths are resolved from the script's own folder, so it works no matter which folder the terminal is in.
@@ -278,7 +278,7 @@ Leave everything under the `don't edit it` comment as it is; those are the folde
 ## Troubleshooting
 - **`Installed Java` is not the number the version needs**: That Java is not installed. Run the setup script again, or install it from the table in [Manual setup](#option-2-manual-setup). On Arch, `archlinux-java status` lists the installed versions.
 - **`ClassCastException ... cannot be cast to class java.net.URLClassLoader`** or **`NoClassDefFoundError: net/minecraft/launchwrapper/...`**: An old Forge version ran on a new Java. Install Java 8.
-- **`<version> needs <base>, install it first`**: The mod loader's base version is missing. Install it with option 2, using the number printed in the message.
+- **`<version> needs <base>`**: The mod loader's base version is missing. Run the launcher again, choose "install new version", and pick the base version named in the message.
 - **`Processor failed, invalid outputs`** (Forge installer): Run the installer with the matching Java (see [Mod Loaders](#mod-loaders)).
 - **`Module minecraft contains package ...`** (modern Forge): The game jar was not renamed. Make sure you are on the latest version of this branch.
 - **`node: error while loading shared libraries: libsimdjson.so...`** (or another `lib...so` file): Node.js is installed but cannot start, because the system is only partly updated. This is common on Arch and CachyOS. Update the whole system, then run `./install.sh` again:
@@ -327,16 +327,16 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | `getVersionJson(url)` | Downloads a version JSON |
 | `mergeVersionJson(parent, child)` | Merges a mod loader JSON with its base version |
 | `mavenToPath(name)` | Turns `group:artifact:version` into a Maven file path |
-| `getVersionNumberInList(id)` | Finds a version's number in the "install new" list |
 | `findJava(requiredJava)` | Finds an installed Java with the exact major version |
 | `getInstalledJavaVersion(javaPath)` | Runs `java -version` and returns the major version (handles the old `1.8` format) |
 | `isAllowed(rules)` | Evaluates Mojang `rules` (OS, architecture, features). The last matching rule wins. |
-| `limiter(worker, items, limit)` | Runs `worker` on every item with at most `limit` running at the same time |
+| `limiter(worker, items, limit, title)` | Runs `worker` on every item with at most `limit` running at the same time, and shows a progress bar named `title` |
 | `checkDownloading(url)` | `fetch` that throws a clear error on any non-OK HTTP status |
 | `checkSha1(filePath, sha1)` | Returns `true` only if the file exists and its SHA1 matches |
 | `downloadClientJar`, `downloadLibrary`, `getAssetIndex`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
+| `logAboveBar(text)` | Prints a line above the progress bar without breaking it |
 | `showAnimatedText(text, time)` | Shows text with a moving rainbow for `time` milliseconds, or as plain text when `time` is `0` |
 
 ---

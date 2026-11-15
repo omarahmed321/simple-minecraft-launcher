@@ -5,7 +5,6 @@ import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
-
 import * as p from "@clack/prompts";
 import {
   writeFile,
@@ -26,9 +25,11 @@ const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
 const ASSET_DOWNLOAD_LIMIT = 16;
 
 // the time of  animation chromatic "made by omar animation" and "have fun"  in milliseconds
-const INTRO_ANIMATION_TIME = 1500;
-const OUTRO_ANIMATION_TIME =1500;
+const INTRO_ANIMATION_TIME = 0;
+const OUTRO_ANIMATION_TIME =0;
 
+// the downloading bar size
+const BAR_SIZE = 20;
 
 //---- logo and colors
 const LOGO = [
@@ -73,7 +74,7 @@ const minecraftPlatform =
         ? "linux"
         : null;
 if (!minecraftPlatform) {
-  console.log("Your OS is not supported");
+p.cancel("Your OS is not supported")
   process.exit(1);
 }
 const nativeExtension =
@@ -102,12 +103,11 @@ async function fetchAllVersions(isLocal) {
     const manifest = await response.json();
     shownVersions = manifest.versions;
   } else {
-    console.log("Invalid input");
     process.exit(1);
   }
 
   if (shownVersions.length === 0) {
-    console.log("No versions found");
+  p.cancel("No versions found")
     process.exit(1);
   }
 
@@ -129,14 +129,18 @@ function isAllowed(rules) {
   return allowed;
 }
 // limiter takes the function as a worker and the assets and how many runners will work this for Concurrency limit
-async function limiter(worker, assets, limit) {
+async function limiter(worker, assets, limit, title) {
   let turn = 0;
-
+  let done=0;
+    const bar = p.progress({ max: assets.length, size: 20 });
+  bar.start(title);
   async function runner() {
     while (turn < assets.length) {
       let asset = assets[turn];
       turn++;
       await worker(asset);
+        done++;
+      bar.advance(1, `${title} ${done}/${assets.length}`);
     }
   }
   const runners = [];
@@ -145,6 +149,7 @@ async function limiter(worker, assets, limit) {
   }
 
   await Promise.all(runners);
+    bar.stop(`${title} done`);
 }
 // check server response like if its 5xx error or 4xx error
 async function checkDownloading(url) {
@@ -212,8 +217,8 @@ async function getVersionJson(versionUrl) {
 // download client jar lol you could tell
 async function downloadClientJar(clientUrl) {
   if (await checkSha1(`${jarPath}`, versionJson.downloads.client.sha1))
-    return console.log(`the file exists at:${jarPath}`);
-  console.log(`Downloading: ${jarPath}`);
+   return;
+p.log.step("Downloading client jar");
   const response = await checkDownloading(clientUrl);
   const jarFile = await response.arrayBuffer();
   await writeFile(`${jarPath}`, Buffer.from(jarFile));
@@ -221,13 +226,12 @@ async function downloadClientJar(clientUrl) {
 }
 // download library
 async function downloadLibrary(file) {
-  if (!file.url) return console.log(`local library: ${file.path}`);
+ if (!file.url) return logAboveBar(`local library: ${file.path}`);
   const libUrl = file.url;
   const path = file.path;
   if (await checkSha1(`${MINECRAFT_DIR}/libraries/${path}`, file.sha1))
-    return console.log(`the file exists: ${MINECRAFT_DIR}/libraries/${path}`);
-
-  console.log(`Downloading: ${path}`);
+   return logAboveBar(`the file exists: ${MINECRAFT_DIR}/libraries/${path}`);
+  logAboveBar(`Downloading: ${path}`);
   const response = await checkDownloading(libUrl);
   const jarFile = await response.arrayBuffer();
   await mkdir(
@@ -238,7 +242,7 @@ async function downloadLibrary(file) {
 }
 // idk the fucntion names is too good at this point?
 async function getAssetIndex(assetUrl) {
-  console.log(`Downloading: ${assetUrl}`);
+
 
   const response = await checkDownloading(assetUrl);
   const assetIndex = await response.json();
@@ -252,10 +256,10 @@ async function downloadAsset(hash, path) {
       hash,
     )
   )
-    return console.log(
+    return logAboveBar(
       `the file exists:${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
     );
-  console.log(`Downloading: ${path}`);
+    logAboveBar(`Downloading: ${path}`);
 
   const response = await checkDownloading(
     `${ASSETS_URL}/${hash.substring(0, 2)}/${hash}`,
@@ -316,16 +320,6 @@ function mavenToPath(name) {
   return `${group}/${artifact}/${version}/${artifact}-${version}.jar`;
 }
 
-// returns the number of the version in the list
-async function getVersionNumberInList(versionId) {
-  const response = await checkDownloading(MANIFEST_URL);
-  const manifest = await response.json();
-  const index = manifest.versions.findIndex(
-    (version) => version.id === versionId,
-  );
-  if (index === -1) return "unknown version";
-  return index + 1;
-}
 
 // looks for an installed java with the exact major version, falls back to JAVA_PATH
 async function findJava(requiredJava) {
@@ -338,7 +332,7 @@ async function findJava(requiredJava) {
       if (getInstalledJavaVersion(javaPath) === requiredJava) return javaPath;
     }
   }
-     console.log(`Java ${requiredJava} not found, using default java instead`);
+    p.log.warn(`Java ${requiredJava} not found, using default java instead`);
   return JAVA_PATH;
 }
 // shows text with a moving rainbow, or as plain text when time is 0
@@ -349,6 +343,10 @@ async function showAnimatedText(text, time) {
   const animation = chalkAnimation.rainbow(text);
   await sleep(time);
   animation.stop();
+}
+// prints a line above the progress bar without breaking it
+function logAboveBar(text) {
+  process.stdout.write(`\r\x1b[2K│  ${text}\n`);
 }
 
 //--------- fetching all version numbers and their types
@@ -385,7 +383,6 @@ if(p.isCancel(selectedVersion)){
   process.exit(0)
 }
 
-console.log("You chose:", selectedVersion.id, selectedVersion.type);
 
 const username = await p.text({
   message: "The name of the user in the game?",
@@ -401,7 +398,7 @@ if (p.isCancel(username)) {
   process.exit(0);
 }
 
-console.log(`username is ${username} `);
+
 
 
 const memAnswer = await p.text({
@@ -421,7 +418,6 @@ if (p.isCancel(memAnswer)) {
 }
 // transforming memAnswer to number cuz the spaces
 const memNumber = Number(memAnswer);
-console.log(`you have set the max memory usage to -Xmx${memNumber}G `);
 
 // path.resolve actually will connect them all
 const versionDir = path.join(MINECRAFT_DIR, "versions", selectedVersion.id);
@@ -449,11 +445,11 @@ if (versionJson.inheritsFrom) {
     `${parentId}.json`,
   );
   if (!existsSync(parentPath)) {
-    const versionNumberList = await getVersionNumberInList(parentId);
-    console.log(
-      `${selectedVersion.id} needs ${parentId} number in list =${versionNumberList}, install it first (option 2)`,
-    );
-    process.exit(1);
+p.cancel(
+  `${selectedVersion.id} needs ${parentId}. Run again, choose "install new version", and pick ${parentId}.`,
+);
+process.exit(1);
+
   }
   const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
   versionJson = mergeVersionJson(parentJson, versionJson);
@@ -462,7 +458,7 @@ if (versionJson.inheritsFrom) {
 const jarPath = path.join(MINECRAFT_DIR, "versions", jarId, `${jarId}.jar`);
 // -----
 const requiredJava = versionJson.javaVersion?.majorVersion ?? 8;
-console.log("Required Java:", requiredJava);
+p.log.info(`Required Java: ${requiredJava}`)
 const offlineUUID = getOfflineUUID(username);
 //--------- Version
 
@@ -507,16 +503,15 @@ for (const lib of versionJson.libraries) {
 
 const javaPath = await findJava(requiredJava);
 const installedJava = getInstalledJavaVersion(javaPath);
-console.log("Installed Java:", installedJava);
+p.log.info(`Installed Java: ${installedJava}`);
 if (installedJava === null) {
-  console.log(
-    `Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`,
-  );
+
+p.cancel(`Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`);
   process.exit(1);
 }
 
 if (installedJava < requiredJava) {
-  console.log(
+  p.cancel(
     `Minecraft ${selectedVersion.id} needs Java ${requiredJava}, but you have Java ${installedJava}.`,
   );
   process.exit(1);
@@ -549,7 +544,8 @@ if (jarId !== selectedVersion.id) {
 
 //--------- Libraries
 
-await limiter(downloadLibrary, libFiles, LIBRARY_FILES_DOWNLOAD_LIMIT);
+await limiter(downloadLibrary, libFiles, LIBRARY_FILES_DOWNLOAD_LIMIT, "Libraries");
+
 
 //--------- Assets
 const assetUrl = versionJson.assetIndex.url;
@@ -560,7 +556,7 @@ await writeFile(
   JSON.stringify(assetIndex),
 );
 const assetList = Object.entries(assetIndex.objects);
-await limiter(downloadOneAsset, assetList, ASSET_DOWNLOAD_LIMIT);
+await limiter(downloadOneAsset, assetList, ASSET_DOWNLOAD_LIMIT, "Assets");
 
 //--------- Natives
 const nativeLibFiles = libFiles.filter((file) => file.isNative);
@@ -586,7 +582,7 @@ for (const native of nativeLibFiles) {
     const fileName = path.basename(entry.entryName);
     await mkdir(`${versionDir}/natives`, { recursive: true });
     await writeFile(`${versionDir}/natives/${fileName}`, entry.getData());
-    console.log(`Extracting: ${fileName}`);
+
   }
 }
 
@@ -596,7 +592,7 @@ const libPaths = libFiles.map((file) => {
 });
 const classpath = [classpathJar, ...libPaths];
 const classpathValue = classpath.join(path.delimiter);
-console.log("-----------------------------------------------");
+
 
 //--------- JvmArguments and GameArguments
 const jvmArguments = [];
