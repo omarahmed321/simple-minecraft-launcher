@@ -14,8 +14,7 @@ import {
   copyFile,
 } from "node:fs/promises";
 
-
-//--------- main settings 
+//--------- main settings
 //---- user can edit
 // java path if u wanna specific one
 const JAVA_PATH = "java";
@@ -26,13 +25,13 @@ const ASSET_DOWNLOAD_LIMIT = 16;
 
 // the time of  animation chromatic "made by omar animation" and "have fun"  in milliseconds
 const INTRO_ANIMATION_TIME = 1500;
-const OUTRO_ANIMATION_TIME =1500;
+const OUTRO_ANIMATION_TIME = 1500;
 
 // the downloading bar size
 const BAR_SIZE = 20;
 
 // bar rendering delay
-const BAR_RENDERING_DELAY =16;
+const BAR_RENDERING_DELAY = 16;
 
 //---- logo and colors
 const LOGO = [
@@ -46,7 +45,6 @@ const LOGO = [
 const PURPLE = "\x1b[38;2;166;120;240m";
 const RESET = "\x1b[39m";
 
-
 // don't edit it
 const BASE_DIR = import.meta.dirname;
 const MINECRAFT_DIR = path.join(BASE_DIR, ".minecraft");
@@ -59,14 +57,13 @@ const JAVA_SEARCH_DIRS = [
   "C:\\Program Files\\Eclipse Adoptium",
 ];
 
-
-//--------- intro  lines with clack 
-console.log(PURPLE + LOGO.join("\n") + RESET);   
+//--------- intro  lines with clack
+console.log(PURPLE + LOGO.join("\n") + RESET);
 await showAnimatedText("made by Omar", INTRO_ANIMATION_TIME);
 console.log();
 p.intro("Simple launcher");
 
-//--------- Platform 
+//--------- Platform
 const platform = os.platform();
 const minecraftPlatform =
   platform == "win32"
@@ -77,7 +74,7 @@ const minecraftPlatform =
         ? "linux"
         : null;
 if (!minecraftPlatform) {
-p.cancel("Your OS is not supported")
+  p.cancel("Your OS is not supported");
   process.exit(1);
 }
 const nativeExtension =
@@ -110,10 +107,9 @@ async function fetchAllVersions(isLocal) {
   }
 
   if (shownVersions.length === 0) {
-  p.cancel("No versions found")
+    p.cancel("No versions found");
     process.exit(1);
   }
-
 
   return shownVersions;
 }
@@ -134,16 +130,23 @@ function isAllowed(rules) {
 // limiter takes the function as a worker and the assets and how many runners will work this for Concurrency limit
 async function limiter(worker, assets, limit, title) {
   let turn = 0;
-  let done=0;
-    const bar = p.progress({ max: assets.length, size: BAR_SIZE,delay:BAR_RENDERING_DELAY });
+  let done = 0;
+  const bar = p.progress({
+    max: assets.length,
+    size: BAR_SIZE,
+    delay: BAR_RENDERING_DELAY,
+  });
   bar.start(title);
   async function runner() {
     while (turn < assets.length) {
       let asset = assets[turn];
       turn++;
       await worker(asset);
-        done++;
-      bar.advance(1, `${title} ${done}/${assets.length} ${path.basename(asset.path ?? asset[0])}`);
+      done++;
+      bar.advance(
+        1,
+        `${title} ${done}/${assets.length} ${path.basename(asset.path ?? asset[0])}`,
+      );
     }
   }
   const runners = [];
@@ -152,7 +155,7 @@ async function limiter(worker, assets, limit, title) {
   }
 
   await Promise.all(runners);
-    bar.stop(`${title} done`);
+  bar.stop(`${title} done`);
 }
 // check server response like if its 5xx error or 4xx error
 async function checkDownloading(url) {
@@ -219,9 +222,8 @@ async function getVersionJson(versionUrl) {
 }
 // download client jar lol you could tell
 async function downloadClientJar(clientUrl) {
-  if (await checkSha1(`${jarPath}`, versionJson.downloads.client.sha1))
-   return;
-p.log.step("Downloading client jar");
+  if (await checkSha1(`${jarPath}`, versionJson.downloads.client.sha1)) return;
+  p.log.step("Downloading client jar");
   const response = await checkDownloading(clientUrl);
   const jarFile = await response.arrayBuffer();
   await writeFile(`${jarPath}`, Buffer.from(jarFile));
@@ -229,12 +231,11 @@ p.log.step("Downloading client jar");
 }
 // download library
 async function downloadLibrary(file) {
- if (!file.url) return;
+  if (!file.url) return;
   const libUrl = file.url;
   const path = file.path;
-  if (await checkSha1(`${MINECRAFT_DIR}/libraries/${path}`, file.sha1))
-   return ;
- 
+  if (await checkSha1(`${MINECRAFT_DIR}/libraries/${path}`, file.sha1)) return;
+
   const response = await checkDownloading(libUrl);
   const jarFile = await response.arrayBuffer();
   await mkdir(
@@ -245,8 +246,6 @@ async function downloadLibrary(file) {
 }
 // idk the fucntion names is too good at this point?
 async function getAssetIndex(assetUrl) {
-
-
   const response = await checkDownloading(assetUrl);
   const assetIndex = await response.json();
   return assetIndex;
@@ -259,8 +258,7 @@ async function downloadAsset(hash, path) {
       hash,
     )
   )
-    return ;
-    
+    return;
 
   const response = await checkDownloading(
     `${ASSETS_URL}/${hash.substring(0, 2)}/${hash}`,
@@ -321,7 +319,6 @@ function mavenToPath(name) {
   return `${group}/${artifact}/${version}/${artifact}-${version}.jar`;
 }
 
-
 // looks for an installed java with the exact major version, falls back to JAVA_PATH
 async function findJava(requiredJava) {
   const javaFile = platform === "win32" ? "java.exe" : "java";
@@ -333,7 +330,7 @@ async function findJava(requiredJava) {
       if (getInstalledJavaVersion(javaPath) === requiredJava) return javaPath;
     }
   }
-    p.log.warn(`Java ${requiredJava} not found, using default java instead`);
+  p.log.warn(`Java ${requiredJava} not found, using default java instead`);
   return JAVA_PATH;
 }
 // shows text with a moving rainbow, or as plain text when time is 0
@@ -347,41 +344,36 @@ async function showAnimatedText(text, time) {
 }
 // prints a line above the progress bar without breaking it
 
-
 //--------- fetching all version numbers and their types
 
 // the questions
 
-
-
 const isLocal = await p.select({
   message: "What do you wanna do ?",
-  options:[
-    {value:1,label:"run an installed version"},
-    {value:2, label:"install new version "}
+  options: [
+    { value: 1, label: "run an installed version" },
+    { value: 2, label: "install new version " },
   ],
-
-})
-if(p.isCancel(isLocal)){
+});
+if (p.isCancel(isLocal)) {
   p.cancel("Cancelled");
   process.exit(0);
 }
 const shownVersions = await fetchAllVersions(isLocal);
 const selectedVersion = await p.autocomplete({
-message :"Choose version:",
-placeholder:"write here the version",
-maxItems:8,
- options: shownVersions.map((version) => ({
+  message: "Choose version:",
+  placeholder: "write here the version",
+  maxItems: 8,
+  options: shownVersions.map((version) => ({
     value: version,
     label: version.id,
     hint: version.type,
   })),
-})
-if(p.isCancel(selectedVersion)){
-  p.cancel("Cancelled")
-  process.exit(0)
+});
+if (p.isCancel(selectedVersion)) {
+  p.cancel("Cancelled");
+  process.exit(0);
 }
-
 
 const username = await p.text({
   message: "The name of the user in the game?",
@@ -397,11 +389,9 @@ if (p.isCancel(username)) {
   process.exit(0);
 }
 
-
-
-
 const memAnswer = await p.text({
-  message: "How much memory u wanna the game allocate (write number for example 3)?",
+  message:
+    "How much memory u wanna the game allocate (write number for example 3)?",
   placeholder: "3",
   validate: (value) => {
     // transforming value to number cuz the spaces
@@ -444,11 +434,10 @@ if (versionJson.inheritsFrom) {
     `${parentId}.json`,
   );
   if (!existsSync(parentPath)) {
-p.cancel(
-  `${selectedVersion.id} needs ${parentId}. Run again, choose "install new version", and pick ${parentId}.`,
-);
-process.exit(1);
-
+    p.cancel(
+      `${selectedVersion.id} needs ${parentId}. Run again, choose "install new version", and pick ${parentId}.`,
+    );
+    process.exit(1);
   }
   const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
   versionJson = mergeVersionJson(parentJson, versionJson);
@@ -457,7 +446,7 @@ process.exit(1);
 const jarPath = path.join(MINECRAFT_DIR, "versions", jarId, `${jarId}.jar`);
 // -----
 const requiredJava = versionJson.javaVersion?.majorVersion ?? 8;
-p.log.info(`Required Java: ${requiredJava}`)
+p.log.info(`Required Java: ${requiredJava}`);
 const offlineUUID = getOfflineUUID(username);
 //--------- Version
 
@@ -504,8 +493,9 @@ const javaPath = await findJava(requiredJava);
 const installedJava = getInstalledJavaVersion(javaPath);
 p.log.info(`Installed Java: ${installedJava}`);
 if (installedJava === null) {
-
-p.cancel(`Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`);
+  p.cancel(
+    `Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`,
+  );
   process.exit(1);
 }
 
@@ -543,8 +533,12 @@ if (jarId !== selectedVersion.id) {
 
 //--------- Libraries
 
-await limiter(downloadLibrary, libFiles, LIBRARY_FILES_DOWNLOAD_LIMIT, "Libraries");
-
+await limiter(
+  downloadLibrary,
+  libFiles,
+  LIBRARY_FILES_DOWNLOAD_LIMIT,
+  "Libraries",
+);
 
 //--------- Assets
 const assetUrl = versionJson.assetIndex.url;
@@ -581,7 +575,6 @@ for (const native of nativeLibFiles) {
     const fileName = path.basename(entry.entryName);
     await mkdir(`${versionDir}/natives`, { recursive: true });
     await writeFile(`${versionDir}/natives/${fileName}`, entry.getData());
-
   }
 }
 
@@ -591,7 +584,6 @@ const libPaths = libFiles.map((file) => {
 });
 const classpath = [classpathJar, ...libPaths];
 const classpathValue = classpath.join(path.delimiter);
-
 
 //--------- JvmArguments and GameArguments
 const jvmArguments = [];
@@ -669,7 +661,6 @@ const javaArguments = [
   versionJson.mainClass,
   ...finalGameArguments,
 ];
-
 
 //--------- outro lines with clack
 p.outro("Launching");
