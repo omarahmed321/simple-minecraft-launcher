@@ -570,6 +570,21 @@ await writeFile(
 const assetList = Object.entries(assetIndex.objects);
 await limiter(downloadOneAsset, assetList, ASSET_DOWNLOAD_LIMIT, "Assets");
 
+//--------- Legacy assets (versions before 1.7.3 look for files by name, not by hash)
+let gameAssetsDir = `${MINECRAFT_DIR}/assets`;
+if (assetIndex.map_to_resources) gameAssetsDir = path.join(gameDir, "resources");
+if (assetIndex.virtual) gameAssetsDir = path.join(MINECRAFT_DIR, "assets", "virtual", versionJson.assetIndex.id);
+
+if (assetIndex.map_to_resources || assetIndex.virtual) {
+  for (const [assetPath, asset] of assetList) {
+    const target = path.join(gameAssetsDir, assetPath);
+    if (existsSync(target)) continue;
+    const hashFile = path.join(MINECRAFT_DIR, "assets", "objects", asset.hash.substring(0, 2), asset.hash);
+    await mkdir(path.dirname(target), { recursive: true });
+    await copyFile(hashFile, target);
+  }
+}
+
 //--------- Natives
 const nativeLibFiles = libFiles.filter((file) => file.isNative);
 // ---------------------------------------------------------------------------------------------
@@ -660,6 +675,8 @@ const replacements = {
   "${auth_access_token}": "0",
   "${clientid}": "0",
   "${assets_root}": `${MINECRAFT_DIR}/assets`,
+  "${game_assets}": gameAssetsDir,
+  "${auth_session}": "0",
   "${auth_xuid}": "",
   "${user_type}": "legacy",
   "${version_name}": selectedVersion.id,

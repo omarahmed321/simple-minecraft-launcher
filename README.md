@@ -92,9 +92,9 @@ The launcher is a single script that runs these stages in order:
 | 1.17 to 1.20.4 | Tested and working | 17 |
 | 1.13 to 1.16.5 | Tested and working (legacy natives) | 8 |
 | 1.7.10 to 1.12.2 | Tested and working (legacy natives and legacy arguments) | 8 |
-| Classic, Indev, Infdev, Alpha, Beta, and 1.0 to 1.7.2 | Tested and working (sounds may be missing, see below) | 8 |
+| Classic, Indev, Infdev, Alpha, Beta, and 1.0 to 1.7.2 | Tested and working (legacy asset layout, see below) | 8 |
 
-Every official version runs, from Classic 0.30 to the latest snapshot. Versions older than 1.7.3 store sounds in an older asset layout (`resources/` or `assets/virtual/legacy/`) that the launcher does not build yet, so the game starts and plays but some sounds can be missing.
+Every official version runs, from Classic 0.30 to the latest snapshot. Versions older than 1.7.3 look for sounds and other assets by file name instead of by hash. After downloading, the launcher copies each asset to its real name: into `instances/<version>/resources/` for versions before 1.6 (the asset index has `map_to_resources`), or into `assets/virtual/<index>/` for 1.6 to 1.7.2 (the asset index has `virtual`). The first launch of such a version takes a little longer while the files are copied; later launches skip files that are already there.
 
 Vanilla versions also run on a newer Java than they ask for. Old Forge versions do not, which is why the launcher picks the exact version.
 
