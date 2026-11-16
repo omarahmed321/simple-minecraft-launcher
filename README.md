@@ -190,10 +190,12 @@ Only `y` or `n` are accepted; anything else asks again. Answer `y` for a Java ve
 
 | System | Where it is created | File |
 |---|---|---|
-| Windows | Desktop | `Simple Minecraft Launcher (SL).lnk` |
+| Windows | Desktop, or the Start menu if the desktop folder is missing | `Simple Minecraft Launcher (SL).lnk` |
 | Linux | Apps menu, and the desktop if `~/Desktop` exists | `~/.local/share/applications/simple-minecraft-launcher.desktop` |
 
 Search for **SL** or **Minecraft** in the Start menu or your app launcher to find it. The shortcut points to the folder you installed in: if you move or rename that folder, run the setup script again. To remove the shortcut, delete the file in the table (and the copy in `~/Desktop` on Linux).
+
+If the script says `Desktop folder not found`, Windows points the desktop to a folder that does not exist. This happens when OneDrive backs up the desktop under a folder name it later lost. The shortcut is then in the Start menu: search for **SL**, and drag it to the desktop if you want it there. To fix the desktop itself, turn off the desktop backup in OneDrive, or right-click **Desktop** in File Explorer, open **Properties**, then **Location**, and point it to the folder your desktop files are in.
 
 **Linux** (Ubuntu / Debian, Arch / CachyOS / Manjaro, Fedora):
 ```bash

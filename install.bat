@@ -21,7 +21,7 @@ choice /m "Have you already installed java 25 (minecraft 26.x) in the default fo
 if %errorlevel%==2 winget install -e --id EclipseAdoptium.Temurin.25.JDK --accept-package-agreements --accept-source-agreements
 
 choice /m "Interested in adding desktop shortcut with icon"
-if %errorlevel%==1 powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop')+'\Simple Minecraft Launcher (SL).lnk'); $s.TargetPath='%~dp0run.bat'; $s.WorkingDirectory='%~dp0'; $s.IconLocation='%~dp0assets\icon.ico'; $s.Save()"
+if %errorlevel%==1 powershell -NoProfile -Command "$d=[Environment]::GetFolderPath('Desktop'); if (-not (Test-Path $d)) { $d=[Environment]::GetFolderPath('Programs'); Write-Host 'Desktop folder not found the shortcut was added to the start menu instead.' }; $s=(New-Object -ComObject WScript.Shell).CreateShortcut($d+'\Simple Minecraft Launcher (SL).lnk'); $s.TargetPath='%~dp0run.bat'; $s.WorkingDirectory='%~dp0'; $s.IconLocation='%~dp0assets\icon.ico'; $s.Save()"
 
 explorer.exe "%~dp0."
 explorer.exe "%~dp0run.bat"
