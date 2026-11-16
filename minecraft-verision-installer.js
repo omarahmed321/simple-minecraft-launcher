@@ -33,6 +33,10 @@ const BAR_SIZE = 20;
 // bar rendering delay
 const BAR_RENDERING_DELAY = 16;
 
+// some spaces around the launcher
+const MARGIN_LEFT = 4;
+const MARGIN_TOP = 2;
+
 //---- logo and colors
 const LOGO = [
   "███████╗██╗     ",
@@ -52,16 +56,33 @@ const MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const ASSETS_URL = "https://resources.download.minecraft.net";
 
+
 const JAVA_SEARCH_DIRS = [
   "/usr/lib/jvm",
   "C:\\Program Files\\Eclipse Adoptium",
 ];
 
+
+//--------- margin
+// the 3 ways a printed line can start: a new line or clack jumping back to the line start
+const LINE_START = /\n|\x1b\[1?G|\x1b\[999D/g;
+
+const margin = " ".repeat(MARGIN_LEFT);
+const printOnScreen = process.stdout.write.bind(process.stdout);
+
+// puts the margin at the start of every line then prints it
+function printWithMargin(text, encoding, callback) {
+  const pushedText = String(text).replaceAll(LINE_START, (lineStart) => lineStart + margin);
+  return printOnScreen(pushedText, encoding, callback);
+}
+
+process.stdout.write = printWithMargin;
+process.stdout.write("\n".repeat(MARGIN_TOP));
 //--------- intro  lines with clack
 console.log(PURPLE + LOGO.join("\n") + RESET);
 await showAnimatedText("made by Omar", INTRO_ANIMATION_TIME);
 console.log();
-p.intro("Simple launcher");
+p.intro("Simple Launcher");
 
 //--------- Platform
 const platform = os.platform();
@@ -102,9 +123,7 @@ async function fetchAllVersions(isLocal) {
     const response = await checkDownloading(MANIFEST_URL);
     const manifest = await response.json();
     shownVersions = manifest.versions;
-  } else {
-    process.exit(1);
-  }
+  } 
 
   if (shownVersions.length === 0) {
     p.cancel("No versions found");
@@ -342,7 +361,7 @@ async function showAnimatedText(text, time) {
   await sleep(time);
   animation.stop();
 }
-// prints a line above the progress bar without breaking it
+
 
 //--------- fetching all version numbers and their types
 
@@ -572,9 +591,7 @@ for (const native of nativeLibFiles) {
   });
 
   for (const entry of nativeFiles) {
-    const fileName = path.basename(entry.entryName);
-    await mkdir(`${versionDir}/natives`, { recursive: true });
-    await writeFile(`${versionDir}/natives/${fileName}`, entry.getData());
+    zip.extractEntryTo(entry, `${versionDir}/natives`, false, true);
   }
 }
 
@@ -666,15 +683,7 @@ const javaArguments = [
 p.outro("Launching");
 await showAnimatedText("Yo Have Fun", OUTRO_ANIMATION_TIME);
 //--------- Launch
-const minecraft = spawn(javaPath, javaArguments, { cwd: gameDir });
-
-minecraft.stdout.on("data", (data) => {
-  console.log("OUT:", data.toString());
-});
-
-minecraft.stderr.on("data", (data) => {
-  console.log("ERR:", data.toString());
-});
+const minecraft = spawn(javaPath, javaArguments, { cwd: gameDir, stdio: "inherit" });
 
 minecraft.on("error", (error) => {
   console.log("SPAWN ERROR:", error);

@@ -291,6 +291,8 @@ The settings are constants at the top of `minecraft-verision-installer.js`, unde
 | `OUTRO_ANIMATION_TIME` | `1500` | How long the "Yo Have Fun" rainbow moves before the game starts, in milliseconds. `0` turns it off. |
 | `BAR_SIZE` | `20` | Width of the download progress bar, in characters. If the bar repeats on new lines instead of updating in place, the line is wider than your terminal: lower this or widen the window. |
 | `BAR_RENDERING_DELAY` | `16` | How often the progress bar is redrawn, in milliseconds. Lower values do not download faster; 16 is about 60 redraws per second. |
+| `MARGIN_LEFT` | `4` | Empty space to the left of everything the launcher shows, in characters. `0` turns it off. |
+| `MARGIN_TOP` | `2` | Empty lines above the logo. `0` turns it off. |
 
 With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second.
 
@@ -337,9 +339,10 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | **Java** | Finds the Java that matches the required version |
 | **Client jar** | Creates the version and instance folders, `launcher_profiles.json`, downloads the jar, and copies it under the mod loader's name |
 | **Libraries / Assets** | Downloads everything with the concurrency limit |
-| **Natives** | Extracts native files into `versions/<version>/natives/` |
+| **Margin** | Wraps `process.stdout.write` so every printed line starts after `MARGIN_LEFT` spaces |
+| **Natives** | Extracts native files into `versions/<version>/natives/` with adm-zip's `extractEntryTo` |
 | **Classpath / Arguments / Replacements** | Builds the final Java command |
-| **Outro / Launch** | Closes the prompt frame, plays the "Yo Have Fun" animation, then starts Java and streams the game output |
+| **Outro / Launch** | Closes the prompt frame, plays the "Yo Have Fun" animation, then starts Java with its output going straight to the terminal (`stdio: "inherit"`) |
 
 **Helper functions:**
 
@@ -359,6 +362,7 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | `downloadClientJar`, `downloadLibrary`, `getAssetIndex`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
+| `printWithMargin(text, encoding, callback)` | Replaces `process.stdout.write`: adds the margin at the start of every line, then prints |
 | `showAnimatedText(text, time)` | Shows text with a moving rainbow for `time` milliseconds, or as plain text when `time` is `0` |
 
 ---
