@@ -79,7 +79,8 @@ The launcher is a single script that runs these stages in order:
 - **Input validation**: Checks the username (3 to 16 characters: letters, numbers, `_`) and memory (1 to 32 GB), and asks again instead of exiting when an answer is wrong.
 - **Cross-platform**: Detects Windows or Linux, picks the matching natives, and uses the correct classpath separator.
 - **Run from anywhere**: All paths are resolved from the script's own folder, so it works no matter which folder the terminal is in.
-- **One-command install**: A single line downloads the launcher (no Git needed), installs Node.js and every Java version, and starts it.
+- **One-command install**: A single line downloads the launcher (no Git needed), asks which of Node.js and Java 8, 17, 21, and 25 you still need, installs only those, and starts it.
+- **Desktop shortcut**: The setup script can add a **Simple Minecraft Launcher (SL)** shortcut with its own icon to the desktop (Windows) or the apps menu and desktop (Linux).
 
 ---
 
@@ -152,7 +153,7 @@ The Forge installer checks the SHA1 of the files it builds. With a newer Java th
 ## Run Locally
 
 ### Quick start (one command)
-Copy one line into a terminal. It downloads the launcher from GitHub (no Git needed), installs **Node.js**, **Java 8, 17, 21, and 25**, and the npm packages, then starts the launcher.
+Copy one line into a terminal. It downloads the launcher from GitHub (no Git needed), asks which of **Node.js** and **Java 8, 17, 21, and 25** you already have, installs the rest and the npm packages, offers a desktop shortcut, then starts the launcher.
 
 **Linux** (terminal):
 ```bash
@@ -176,13 +177,31 @@ Both commands create a `simple-minecraft-launcher-instances-supported-version` f
 ### Option 1: Setup script
 The scripts install **Node.js**, **Java 8, 17, 21, and 25**, and the npm packages, then start the launcher.
 
+**Questions the script asks:**
+
+| Question | Answer `y` | Answer `n` |
+|---|---|---|
+| Have you already installed nodejs / java 8 / 17 / 21 / 25 | Skips it | Installs it |
+| Interested in adding desktop shortcut with icon | Adds the shortcut | Skips it |
+
+Only `y` or `n` are accepted; anything else asks again. Answer `y` for a Java version only if it is in the default folder, because the launcher looks for Java only there: `C:\Program Files\Eclipse Adoptium` on Windows and `/usr/lib/jvm` on Linux. Installing with the script or your package manager puts it there.
+
+**The desktop shortcut:**
+
+| System | Where it is created | File |
+|---|---|---|
+| Windows | Desktop | `Simple Minecraft Launcher (SL).lnk` |
+| Linux | Apps menu, and the desktop if `~/Desktop` exists | `~/.local/share/applications/simple-minecraft-launcher.desktop` |
+
+Search for **SL** or **Minecraft** in the Start menu or your app launcher to find it. The shortcut points to the folder you installed in: if you move or rename that folder, run the setup script again. To remove the shortcut, delete the file in the table (and the copy in `~/Desktop` on Linux).
+
 **Linux** (Ubuntu / Debian, Arch / CachyOS / Manjaro, Fedora):
 ```bash
 git clone -b instances-supported-version https://github.com/omarahmed321/simple-minecraft-launcher.git
 cd simple-minecraft-launcher
 ./install.sh
 ```
-The script uses `sudo` to install packages. If one Java version is not available on your distribution, only that line fails and the rest continue.
+The script uses `sudo` to install packages. If one Java version is not available on your distribution, only that line fails and the rest continue. It supports `pacman`, `apt`, and `dnf`; on other systems it stops and asks you to install Node.js and Java yourself.
 
 **Windows** (10 or 11):
 ```powershell
@@ -346,8 +365,9 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 ```
 simple-minecraft-launcher/
 ├── minecraft-verision-installer.js   # The launcher
-├── install.sh                        # Linux: installs Node.js and Java 8/17/21/25, then runs run.sh
-├── install.bat                       # Windows: installs Node.js and Java 8/17/21/25, then opens run.bat
+├── install.sh                        # Linux: asks, installs Node.js and Java 8/17/21/25, adds the shortcut, then runs run.sh
+├── install.bat                       # Windows: asks, installs Node.js and Java 8/17/21/25, adds the shortcut, then opens run.bat
+├── assets/                           # icon.svg (source), icon.png (Linux), icon.ico (Windows)
 ├── run.sh                            # Linux: npm install (first time only) + start
 ├── run.bat                           # Windows: npm install (first time only) + start
 ├── package.json                      # Project metadata, start script, dependencies
