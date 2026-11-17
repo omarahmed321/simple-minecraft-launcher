@@ -40,7 +40,7 @@ The launcher is a single script that runs these stages in order:
 1. **Source**: Asks whether to run an **installed** version or **install a new** one.
    - **Installed**: Lists every folder in `.minecraft/versions/` that has a `<id>/<id>.json` file. This includes versions made by the Fabric, Forge, and NeoForge installers. Works without internet.
    - **New**: Downloads Mojang's version manifest and lists every version with its type (`release`, `snapshot`, `old_beta`, `old_alpha`).
-2. **Questions**: Asks for the version (a searchable list), the in-game username, and the maximum memory in GB. Every answer is validated before anything is downloaded.
+2. **Questions**: Asks for a profile (an in-game username and the maximum memory in GB, saved in `profiles.json`), then the version (a searchable list). Every answer is validated before anything is downloaded.
 3. **Version JSON**: Downloads the JSON for a new version, or reads it from disk for an installed one.
 4. **Merge (`inheritsFrom`)**: A mod loader JSON only lists what it adds and points to its base version with `inheritsFrom`. The launcher reads the base JSON and merges both into one: libraries and arguments are combined, `mainClass` comes from the mod loader, and the assets, client jar, and Java version come from the base. If the base version is missing, the launcher names the version you need to install first.
 5. **Library normalization**: Converts every library format into one list of `{ path, url, sha1, isNative }` entries:
@@ -66,6 +66,7 @@ The launcher is a single script that runs these stages in order:
 ---
 
 ## Features
+- **Profiles**: Save a username and memory once, then pick the profile at every start instead of typing them again.
 - **Installed or new**: Run versions already in `.minecraft`, or pick any official version or snapshot to download.
 - **Mod loader support**: Runs versions installed by the official Fabric, Forge, and NeoForge installers (see [Mod Loaders](#mod-loaders)).
 - **Standard `.minecraft` layout**: `versions/<id>/<id>.jar`, `<id>.json`, `libraries/`, `assets/`, and `launcher_profiles.json`, so official installers recognize the folder.
@@ -251,6 +252,9 @@ made by Omar
 
 ┌  Simple launcher
 │
+◇  Choose a profile
+│  Omar
+│
 ◇  What do you wanna do ?
 │  install new version
 │
@@ -265,12 +269,16 @@ made by Omar
 └
 ```
 
-1. **Source**: pick with the arrow keys and press Enter. "run an installed version" lists what is already in `.minecraft` (including Fabric, Forge, and NeoForge); "install new version" downloads one.
-2. **Version**: type part of the version name to filter the list (for example `1.20`), move with the arrow keys, and press Enter.
-3. **Username**: 3 to 16 characters, using letters, numbers, and `_`.
-4. **Memory**: whole number of GB between 1 and 32 (passed to Java as `-Xmx<number>G`).
+1. **Profile**: pick a saved profile, or "+ create a new profile". The first time, when no profile exists yet, the launcher goes straight to creating one.
+2. **Source**: pick with the arrow keys and press Enter. "run an installed version" lists what is already in `.minecraft` (including Fabric, Forge, and NeoForge); "install new version" downloads one.
+3. **Version**: type part of the version name to filter the list (for example `1.20`), move with the arrow keys, and press Enter.
 
-If the username or memory is not valid, the launcher shows the reason and asks again. Press `Ctrl+C` at any question to exit.
+**Creating a profile** asks two questions:
+
+- **Username**: 3 to 16 characters, using letters, numbers, and `_`.
+- **Memory**: whole number of GB between 1 and 32 (passed to Java as `-Xmx<number>G`).
+
+If an answer is not valid, the launcher shows the reason and asks again. Profiles are saved in `profiles.json` next to the launcher; to rename or delete one, edit that file. Press `Ctrl+C` at any question to exit.
 
 The first run of a version downloads the client, its libraries, and its assets. Later runs verify the files and start much faster. Mods go in `.minecraft/instances/<version>/mods/`, and worlds, logs, and settings are saved next to them.
 
@@ -334,7 +342,8 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | **Intro** | Prints the logo, the animated "made by Omar" line, and opens the prompt frame |
 | **Platform** | Detects the OS, CPU architecture, and native file extension |
 | **Helpers** | Shared functions (table below) |
-| **Questions** | Installed or new, version, username, memory |
+| **Profile** | Loads `profiles.json`, shows the profile list, or creates a profile |
+| **Questions** | Installed or new, version |
 | **Version JSON + merge** | Reads or downloads the JSON and merges it with its `inheritsFrom` base |
 | **Libraries list** | Builds the normalized `libFiles` list from every library format |
 | **Java** | Finds the Java that matches the required version |
@@ -364,6 +373,8 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
 | `printWithMargin(text, encoding, callback)` | Replaces `process.stdout.write`: adds the margin at the start of every line, then prints |
+| `loadProfiles()` / `saveProfiles(profiles)` | Read and write `profiles.json` |
+| `createProfile(profiles)` | Asks for a username and memory, saves the new profile, and returns it |
 | `showAnimatedText(text, time)` | Shows text with a moving rainbow for `time` milliseconds, or as plain text when `time` is `0` |
 
 ---
@@ -382,6 +393,7 @@ simple-minecraft-launcher/
 
 Created at runtime:
 ├── node_modules/
+├── profiles.json                     # Saved profiles (username and memory)
 └── .minecraft/
     ├── launcher_profiles.json        # Needed by the Fabric / Forge installers
     ├── libraries/                    # Shared Java libraries (Maven layout)

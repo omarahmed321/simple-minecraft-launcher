@@ -52,6 +52,7 @@ const RESET = "\x1b[39m";
 // don't edit it
 const BASE_DIR = import.meta.dirname;
 const MINECRAFT_DIR = path.join(BASE_DIR, ".minecraft");
+const PROFILES_PATH = path.join(BASE_DIR, "profiles.json");
 const MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const ASSETS_URL = "https://resources.download.minecraft.net";
@@ -333,7 +334,7 @@ function mavenToPath(name) {
   return `${group}/${artifact}/${version}/${artifact}-${version}.jar`;
 }
 
-// looks for an installed java with the exact major version, falls back to JAVA_PATH
+// looks for an installed java with the exact major version falls back to JAVA_PATH
 async function findJava(requiredJava) {
   const javaFile = platform === "win32" ? "java.exe" : "java";
   for (const baseDir of JAVA_SEARCH_DIRS) {
@@ -347,7 +348,7 @@ async function findJava(requiredJava) {
   p.log.warn(`Java ${requiredJava} not found, using default java instead`);
   return JAVA_PATH;
 }
-// shows text with a moving rainbow, or as plain text when time is 0
+// shows text with a moving rainbow or as plain text when time is 0
 async function showAnimatedText(text, time) {
   if (time === 0) return console.log(text);
 
@@ -357,8 +358,79 @@ async function showAnimatedText(text, time) {
   animation.stop();
 }
 
+// reads the saved profiles or an empty list the first time lol 
+async function loadProfiles() {
+  if (!existsSync(PROFILES_PATH)) return [];
+  const data = JSON.parse(await readFile(PROFILES_PATH, "utf8"));
+  return data.profiles;
+}
 
-//--------- fetching all version numbers and their types
+
+
+// saves the profiles list to profiles.json
+async function saveProfiles(profiles) {
+  await writeFile(PROFILES_PATH, JSON.stringify({ profiles }, null, 2));
+}
+
+// asks for a name and memory, saves them as a new profile, and returns it
+async function createProfile(profiles) {
+  const name = await p.text({
+    message: "The name of the user in the game?",
+    placeholder: "Steve",
+    validate: (value) => {
+      if (!/^\w{3,16}$/.test(value)) {
+        return "username must be 3-16 characters, letters, numbers, and u can use _";
+      }
+    },
+  });
+  if (p.isCancel(name)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+
+  const memAnswer = await p.text({
+    message: "How much memory u wanna the game allocate (write number for example 3)?",
+    placeholder: "3",
+    validate: (value) => {
+      // transforming value to number cuz the spaces
+      const number = Number(value);
+      if (!Number.isInteger(number) || number < 1 || number > 32) {
+        return "Memory must be a whole number between 1 and 32";
+      }
+    },
+  });
+  if (p.isCancel(memAnswer)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+
+  const profile = { name: name, memory: Number(memAnswer) };
+  profiles.push(profile);
+  await saveProfiles(profiles);
+  p.log.success(`Profile "${name}" saved`);
+  return profile;
+}
+//--------- Profile
+const profiles = await loadProfiles();
+// with no saved profiles, skip the list and go straight to creating one
+let profile = "new";
+if (profiles.length > 0) {
+  profile = await p.select({
+    message: "Choose a profile",
+    options: [
+      ...profiles.map((saved) => ({ value: saved, label: saved.name, hint: `${saved.memory} GB` })),
+      { value: "new", label: "+ create a new profile" },
+    ],
+  });
+  if (p.isCancel(profile)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+}
+if (profile === "new") profile = await createProfile(profiles);
+
+const username = profile.name;
+const memNumber = profile.memory;
 
 // the questions
 
@@ -389,38 +461,7 @@ if (p.isCancel(selectedVersion)) {
   process.exit(0);
 }
 
-const username = await p.text({
-  message: "The name of the user in the game?",
-  placeholder: "Steve",
-  validate: (value) => {
-    if (!/^\w{3,16}$/.test(value)) {
-      return "username must be 3-16 characters, letters, numbers, and u can use _";
-    }
-  },
-});
-if (p.isCancel(username)) {
-  p.cancel("Cancelled");
-  process.exit(0);
-}
 
-const memAnswer = await p.text({
-  message:
-    "How much memory u wanna the game allocate (write number for example 3)?",
-  placeholder: "3",
-  validate: (value) => {
-    // transforming value to number cuz the spaces
-    const number = Number(value);
-    if (!Number.isInteger(number) || number < 1 || number > 32) {
-      return "Memory must be a whole number between 1 and 32";
-    }
-  },
-});
-if (p.isCancel(memAnswer)) {
-  p.cancel("Cancelled");
-  process.exit(0);
-}
-// transforming memAnswer to number cuz the spaces
-const memNumber = Number(memAnswer);
 
 // path.resolve actually will connect them all
 const versionDir = path.join(MINECRAFT_DIR, "versions", selectedVersion.id);
