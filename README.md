@@ -289,7 +289,7 @@ The launcher prints `Required Java` and `Installed Java` before starting, so you
 ---
 
 ## Settings
-The settings are constants at the top of `minecraft-verision-installer.js`, under the `user can edit` comment. Open the file in any text editor, change a value, save, and run the launcher again.
+The settings live in `settings.json` next to the launcher. The launcher creates it with the defaults on the first run. Open it in any text editor, change a value, save, and run the launcher again. Updates never touch this file.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -305,7 +305,7 @@ The settings are constants at the top of `minecraft-verision-installer.js`, unde
 
 With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second.
 
-Leave everything under the `don't edit it` comment as it is; those are the folders and download addresses the launcher depends on.
+A setting you delete from the file goes back to its default. If the file has a mistake in it (a missing `,` or `"`), the launcher says so and stops; fix it, or delete `settings.json` to get the defaults back.
 
 ---
 
@@ -338,7 +338,8 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 
 | Section | Responsibility |
 |---|---|
-| **Settings** | What the user can edit (`JAVA_PATH`, download limits, animation times), the logo and its colors, then `BASE_DIR`, `MINECRAFT_DIR`, URLs, and `JAVA_SEARCH_DIRS` |
+| **Settings** | `DEFAULT_SETTINGS`, the logo and its colors, then `BASE_DIR`, `MINECRAFT_DIR`, file paths, URLs, and `JAVA_SEARCH_DIRS` |
+| **settings.json** | Creates `settings.json` with the defaults the first time, reads it, and fills in any missing value from `DEFAULT_SETTINGS` |
 | **Intro** | Prints the logo, the animated "made by Omar" line, and opens the prompt frame |
 | **Platform** | Detects the OS, CPU architecture, and native file extension |
 | **Helpers** | Shared functions (table below) |
@@ -394,6 +395,7 @@ simple-minecraft-launcher/
 Created at runtime:
 ├── node_modules/
 ├── profiles.json                     # Saved profiles (username and memory)
+├── settings.json                     # Your settings (see Settings)
 └── .minecraft/
     ├── launcher_profiles.json        # Needed by the Fabric / Forge installers
     ├── libraries/                    # Shared Java libraries (Maven layout)

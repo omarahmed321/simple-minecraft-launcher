@@ -15,27 +15,19 @@ import {
 } from "node:fs/promises";
 
 //--------- main settings
-//---- user can edit
-// java path if u wanna specific one
-const JAVA_PATH = "java";
 
-// when installing how much files u wanna installing parallel
-const LIBRARY_FILES_DOWNLOAD_LIMIT = 8;
-const ASSET_DOWNLOAD_LIMIT = 16;
-
-// the time of  animation chromatic "made by omar animation" and "have fun"  in milliseconds
-const INTRO_ANIMATION_TIME = 1500;
-const OUTRO_ANIMATION_TIME = 1500;
-
-// the downloading bar size
-const BAR_SIZE = 20;
-
-// bar rendering delay
-const BAR_RENDERING_DELAY = 16;
-
-// some spaces around the launcher
-const MARGIN_LEFT = 4;
-const MARGIN_TOP = 2;
+//---- default settings settings.json next to the launcher overrides them
+const DEFAULT_SETTINGS = {
+  JAVA_PATH: "java",
+  LIBRARY_FILES_DOWNLOAD_LIMIT: 8,
+  ASSET_DOWNLOAD_LIMIT: 16,
+  INTRO_ANIMATION_TIME: 1500,
+  OUTRO_ANIMATION_TIME: 1500,
+  BAR_SIZE: 20,
+  BAR_RENDERING_DELAY: 16,
+  MARGIN_LEFT: 4,
+  MARGIN_TOP: 2,
+};
 
 //---- logo and colors
 const LOGO = [
@@ -53,15 +45,46 @@ const RESET = "\x1b[39m";
 const BASE_DIR = import.meta.dirname;
 const MINECRAFT_DIR = path.join(BASE_DIR, ".minecraft");
 const PROFILES_PATH = path.join(BASE_DIR, "profiles.json");
+const SETTINGS_PATH = path.join(BASE_DIR, "settings.json");
 const MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const ASSETS_URL = "https://resources.download.minecraft.net";
-
-
+const UPDATE_PACKAGE_URL =
+  "https://raw.githubusercontent.com/omarahmed321/simple-minecraft-launcher/instances-supported-version/package.json";
+const UPDATE_ZIP_URL =
+  "https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/instances-supported-version.zip";
 const JAVA_SEARCH_DIRS = [
   "/usr/lib/jvm",
   "C:\\Program Files\\Eclipse Adoptium",
 ];
+
+//--------- settings.json
+// creates settings.json with the defaults the first time
+if (!existsSync(SETTINGS_PATH)) {
+  await writeFile(SETTINGS_PATH, JSON.stringify(DEFAULT_SETTINGS, null, 2));
+}
+
+// a typo in settings.json would crash the launcher so show a clear message instead
+let savedSettings;
+try {
+  savedSettings = JSON.parse(await readFile(SETTINGS_PATH, "utf8"));
+} catch {
+  console.log("settings.json has a mistake in it. fix it or delete it to get the default settings back.");
+  process.exit(1);
+}
+
+// saved values win and anything missing from the file uses its default
+const {
+  JAVA_PATH,
+  LIBRARY_FILES_DOWNLOAD_LIMIT,
+  ASSET_DOWNLOAD_LIMIT,
+  INTRO_ANIMATION_TIME,
+  OUTRO_ANIMATION_TIME,
+  BAR_SIZE,
+  BAR_RENDERING_DELAY,
+  MARGIN_LEFT,
+  MARGIN_TOP,
+} = { ...DEFAULT_SETTINGS, ...savedSettings };
 
 
 //--------- margin
@@ -409,6 +432,46 @@ async function createProfile(profiles) {
   await saveProfiles(profiles);
   p.log.success(`Profile "${name}" saved`);
   return profile;
+}
+
+// returns the newest version number on GitHub or null with no internet
+async function getLatestVersion() {
+  try {
+    const response = await fetch(UPDATE_PACKAGE_URL, { signal: AbortSignal.timeout(3000) });
+    const latestPackage = await response.json();
+    return latestPackage.version;
+  } catch {
+    return null;
+  }
+}
+
+// downloads the newest launcher from GitHub and unpacks it over the current files
+async function updateLauncher() {
+  const response = await checkDownloading(UPDATE_ZIP_URL);
+  const zip = new AdmZip(Buffer.from(await response.arrayBuffer()));
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory) continue;
+    // every file in the zip is inside one top folder so drop that folder from the path
+    const relativePath = entry.entryName.split("/").slice(1).join("/");
+    // windows keeps reading run.bat while it runs so changing it now could break the window
+    if (relativePath === "run.bat") continue;
+    zip.extractEntryTo(entry, path.join(BASE_DIR, path.dirname(relativePath)), false, true);
+  }
+}
+
+const localPackage = JSON.parse(await readFile(path.join(BASE_DIR, "package.json"), "utf8"));
+const isDevCopy = existsSync(path.join(BASE_DIR, ".git"));
+const latestVersion = isDevCopy ? null : await getLatestVersion();
+
+if (latestVersion && latestVersion !== localPackage.version) {
+  const wantsUpdate = await p.confirm({
+    message: `Update available (${localPackage.version} → ${latestVersion}). Update now?`,
+  });
+  if (p.isCancel(wantsUpdate)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+  if (wantsUpdate) await updateLauncher();
 }
 //--------- Profile
 const profiles = await loadProfiles();
