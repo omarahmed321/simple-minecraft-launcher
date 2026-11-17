@@ -69,7 +69,9 @@ let savedSettings;
 try {
   savedSettings = JSON.parse(await readFile(SETTINGS_PATH, "utf8"));
 } catch {
-  console.log("settings.json has a mistake in it. fix it or delete it to get the default settings back.");
+  console.log(
+    "settings.json has a mistake in it. fix it or delete it to get the default settings back.",
+  );
   process.exit(1);
 }
 
@@ -86,22 +88,34 @@ const {
   MARGIN_TOP,
 } = { ...DEFAULT_SETTINGS, ...savedSettings };
 
-
 //--------- margin
 // the 3 ways a printed line can start: a new line or clack jumping back to the line start
+
+// checks if margin is valid or not (mandatory to be here)
+function validMargin(name, value, max) {
+  if (Number.isInteger(value) && value >= 0 && value <= max) return value;
+  console.log(
+    `settings.json: ${name} must be a whole number from 0 to ${max}, using ${DEFAULT_SETTINGS[name]} instead.`,
+  );
+  return DEFAULT_SETTINGS[name];
+}
+
 const LINE_START = /\n|\x1b\[1?G|\x1b\[999D/g;
 
-const margin = " ".repeat(MARGIN_LEFT);
+const margin = " ".repeat(validMargin("MARGIN_LEFT", MARGIN_LEFT, 40));
 const printOnScreen = process.stdout.write.bind(process.stdout);
 
 // puts the margin at the start of every line then prints it
 function printWithMargin(text, encoding, callback) {
-  const pushedText = String(text).replaceAll(LINE_START, (lineStart) => lineStart + margin);
+  const pushedText = String(text).replaceAll(
+    LINE_START,
+    (lineStart) => lineStart + margin,
+  );
   return printOnScreen(pushedText, encoding, callback);
 }
 
 process.stdout.write = printWithMargin;
-process.stdout.write("\n".repeat(MARGIN_TOP));
+process.stdout.write("\n".repeat(validMargin("MARGIN_TOP", MARGIN_TOP, 20)));
 //--------- intro  lines with clack
 console.log(PURPLE + LOGO.join("\n") + RESET);
 await showAnimatedText("made by Omar", INTRO_ANIMATION_TIME);
@@ -147,7 +161,7 @@ async function fetchAllVersions(isLocal) {
     const response = await checkDownloading(MANIFEST_URL);
     const manifest = await response.json();
     shownVersions = manifest.versions;
-  } 
+  }
 
   if (shownVersions.length === 0) {
     p.cancel("No versions found");
@@ -381,14 +395,12 @@ async function showAnimatedText(text, time) {
   animation.stop();
 }
 
-// reads the saved profiles or an empty list the first time lol 
+// reads the saved profiles or an empty list the first time lol
 async function loadProfiles() {
   if (!existsSync(PROFILES_PATH)) return [];
   const data = JSON.parse(await readFile(PROFILES_PATH, "utf8"));
   return data.profiles;
 }
-
-
 
 // saves the profiles list to profiles.json
 async function saveProfiles(profiles) {
@@ -412,7 +424,8 @@ async function createProfile(profiles) {
   }
 
   const memAnswer = await p.text({
-    message: "How much memory u wanna the game allocate (write number for example 3)?",
+    message:
+      "How much memory u wanna the game allocate (write number for example 3)?",
     placeholder: "3",
     validate: (value) => {
       // transforming value to number cuz the spaces
@@ -437,7 +450,9 @@ async function createProfile(profiles) {
 // returns the newest version number on GitHub or null with no internet
 async function getLatestVersion() {
   try {
-    const response = await fetch(UPDATE_PACKAGE_URL, { signal: AbortSignal.timeout(3000) });
+    const response = await fetch(UPDATE_PACKAGE_URL, {
+      signal: AbortSignal.timeout(3000),
+    });
     const latestPackage = await response.json();
     return latestPackage.version;
   } catch {
@@ -455,11 +470,19 @@ async function updateLauncher() {
     const relativePath = entry.entryName.split("/").slice(1).join("/");
     // windows keeps reading run.bat while it runs so changing it now could break the window
     if (relativePath === "run.bat") continue;
-    zip.extractEntryTo(entry, path.join(BASE_DIR, path.dirname(relativePath)), false, true);
+    zip.extractEntryTo(
+      entry,
+      path.join(BASE_DIR, path.dirname(relativePath)),
+      false,
+      true,
+    );
   }
 }
 
-const localPackage = JSON.parse(await readFile(path.join(BASE_DIR, "package.json"), "utf8"));
+// checks if there is a newier version
+const localPackage = JSON.parse(
+  await readFile(path.join(BASE_DIR, "package.json"), "utf8"),
+);
 const isDevCopy = existsSync(path.join(BASE_DIR, ".git"));
 const latestVersion = isDevCopy ? null : await getLatestVersion();
 
@@ -477,12 +500,18 @@ if (latestVersion && latestVersion !== localPackage.version) {
 
       // a new version can need new packages
       p.log.step("Installing new packages");
-      const install = spawnSync("npm", ["install"], { cwd: BASE_DIR, stdio: "ignore", shell: true });
+      const install = spawnSync("npm", ["install"], {
+        cwd: BASE_DIR,
+        stdio: "ignore",
+        shell: true,
+      });
       if (install.status !== 0) throw new Error("npm install failed");
 
       // start the updated launcher in this same window and close this old one when it closes
       p.outro(`Updated to ${latestVersion}, starting the new version`);
-      const newLauncher = spawnSync(process.execPath, process.argv.slice(1), { stdio: "inherit" });
+      const newLauncher = spawnSync(process.execPath, process.argv.slice(1), {
+        stdio: "inherit",
+      });
       process.exit(newLauncher.status ?? 0);
     } catch {
       p.log.warn("Update failed, keeping the current version.");
@@ -497,7 +526,11 @@ if (profiles.length > 0) {
   profile = await p.select({
     message: "Choose a profile",
     options: [
-      ...profiles.map((saved) => ({ value: saved, label: saved.name, hint: `${saved.memory} GB` })),
+      ...profiles.map((saved) => ({
+        value: saved,
+        label: saved.name,
+        hint: `${saved.memory} GB`,
+      })),
       { value: "new", label: "+ create a new profile" },
     ],
   });
@@ -539,8 +572,6 @@ if (p.isCancel(selectedVersion)) {
   p.cancel("Cancelled");
   process.exit(0);
 }
-
-
 
 // path.resolve actually will connect them all
 const versionDir = path.join(MINECRAFT_DIR, "versions", selectedVersion.id);
@@ -675,7 +706,12 @@ await limiter(
 );
 
 //--------- Assets
-const indexPath = path.join(MINECRAFT_DIR, "assets", "indexes", `${versionJson.assetIndex.id}.json`);
+const indexPath = path.join(
+  MINECRAFT_DIR,
+  "assets",
+  "indexes",
+  `${versionJson.assetIndex.id}.json`,
+);
 // use the saved index when it is there and not broken, so installed versions start without internet
 if (!(await checkSha1(indexPath, versionJson.assetIndex.sha1))) {
   const response = await checkDownloading(versionJson.assetIndex.url);
@@ -688,14 +724,27 @@ await limiter(downloadOneAsset, assetList, ASSET_DOWNLOAD_LIMIT, "Assets");
 
 //--------- Legacy assets (versions before 1.7.3 look for files by name, not by hash)
 let gameAssetsDir = `${MINECRAFT_DIR}/assets`;
-if (assetIndex.map_to_resources) gameAssetsDir = path.join(gameDir, "resources");
-if (assetIndex.virtual) gameAssetsDir = path.join(MINECRAFT_DIR, "assets", "virtual", versionJson.assetIndex.id);
+if (assetIndex.map_to_resources)
+  gameAssetsDir = path.join(gameDir, "resources");
+if (assetIndex.virtual)
+  gameAssetsDir = path.join(
+    MINECRAFT_DIR,
+    "assets",
+    "virtual",
+    versionJson.assetIndex.id,
+  );
 
 if (assetIndex.map_to_resources || assetIndex.virtual) {
   for (const [assetPath, asset] of assetList) {
     const target = path.join(gameAssetsDir, assetPath);
     if (existsSync(target)) continue;
-    const hashFile = path.join(MINECRAFT_DIR, "assets", "objects", asset.hash.substring(0, 2), asset.hash);
+    const hashFile = path.join(
+      MINECRAFT_DIR,
+      "assets",
+      "objects",
+      asset.hash.substring(0, 2),
+      asset.hash,
+    );
     await mkdir(path.dirname(target), { recursive: true });
     await copyFile(hashFile, target);
   }
@@ -816,7 +865,10 @@ const javaArguments = [
 p.outro("Launching");
 await showAnimatedText("Yo Have Fun", OUTRO_ANIMATION_TIME);
 //--------- Launch
-const minecraft = spawn(javaPath, javaArguments, { cwd: gameDir, stdio: "inherit" });
+const minecraft = spawn(javaPath, javaArguments, {
+  cwd: gameDir,
+  stdio: "inherit",
+});
 
 minecraft.on("error", (error) => {
   console.log("SPAWN ERROR:", error);

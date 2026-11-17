@@ -303,8 +303,8 @@ The settings live in `settings.json` next to the launcher. The launcher creates 
 | `OUTRO_ANIMATION_TIME` | `1500` | How long the "Yo Have Fun" rainbow moves before the game starts, in milliseconds. `0` turns it off. |
 | `BAR_SIZE` | `20` | Width of the download progress bar, in characters. If the bar repeats on new lines instead of updating in place, the line is wider than your terminal: lower this or widen the window. |
 | `BAR_RENDERING_DELAY` | `16` | How often the progress bar is redrawn, in milliseconds. Lower values do not download faster; 16 is about 60 redraws per second. |
-| `MARGIN_LEFT` | `4` | Empty space to the left of everything the launcher shows, in characters. `0` turns it off. |
-| `MARGIN_TOP` | `2` | Empty lines above the logo. `0` turns it off. |
+| `MARGIN_LEFT` | `4` | Empty space to the left of everything the launcher shows, in characters, from `0` (off) to `40`. Any other value uses the default and prints a message. |
+| `MARGIN_TOP` | `2` | Empty lines above the logo, from `0` (off) to `20`. Any other value uses the default and prints a message. |
 
 With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second.
 
