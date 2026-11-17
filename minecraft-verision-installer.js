@@ -263,12 +263,7 @@ async function downloadLibrary(file) {
   );
   await writeFile(`${MINECRAFT_DIR}/libraries/${path}`, Buffer.from(jarFile));
 }
-// idk the fucntion names is too good at this point?
-async function getAssetIndex(assetUrl) {
-  const response = await checkDownloading(assetUrl);
-  const assetIndex = await response.json();
-  return assetIndex;
-}
+
 // download asset
 async function downloadAsset(hash, path) {
   if (
@@ -560,13 +555,14 @@ await limiter(
 );
 
 //--------- Assets
-const assetUrl = versionJson.assetIndex.url;
-const assetIndex = await getAssetIndex(assetUrl);
-await mkdir(`${MINECRAFT_DIR}/assets/indexes`, { recursive: true });
-await writeFile(
-  `${MINECRAFT_DIR}/assets/indexes/${versionJson.assetIndex.id}.json`,
-  JSON.stringify(assetIndex),
-);
+const indexPath = path.join(MINECRAFT_DIR, "assets", "indexes", `${versionJson.assetIndex.id}.json`);
+// use the saved index when it is there and not broken, so installed versions start without internet
+if (!(await checkSha1(indexPath, versionJson.assetIndex.sha1))) {
+  const response = await checkDownloading(versionJson.assetIndex.url);
+  await mkdir(path.dirname(indexPath), { recursive: true });
+  await writeFile(indexPath, await response.text());
+}
+const assetIndex = JSON.parse(await readFile(indexPath, "utf8"));
 const assetList = Object.entries(assetIndex.objects);
 await limiter(downloadOneAsset, assetList, ASSET_DOWNLOAD_LIMIT, "Assets");
 

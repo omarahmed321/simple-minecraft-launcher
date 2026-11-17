@@ -49,7 +49,7 @@ The launcher is a single script that runs these stages in order:
    - **Maven format** (Fabric, old Forge): only a `name` like `net.fabricmc:fabric-loader:0.19.5` and a repository `url`. The path is built from the name (`net/fabricmc/fabric-loader/0.19.5/fabric-loader-0.19.5.jar`).
    - Libraries that the Forge installer generated itself have an empty `url` and are used from disk without downloading.
 6. **Java selection**: Reads the required Java version (for example 8, 17, 21, or 25) and looks for an installed Java with exactly that version in `/usr/lib/jvm` (Linux) or `C:\Program Files\Eclipse Adoptium` (Windows). If none matches, it falls back to the default `java`.
-7. **Downloads**: Downloads the client jar, the libraries, the asset index, and every asset object. Libraries and assets download in parallel with a **concurrency limit** (8 and 16 at a time).
+7. **Downloads**: Downloads the client jar, the libraries, the asset index, and every asset object. Each file, the asset index included, is downloaded only if it is missing or its SHA1 does not match. Libraries and assets download in parallel with a **concurrency limit** (8 and 16 at a time).
 8. **Verification**: Before downloading, every file that already exists is checked against its **SHA1**. Valid files are skipped; missing, partial, or corrupted files are downloaded again. Failed HTTP responses stop the launcher instead of writing broken files.
 9. **Client jar for mod loaders**: The base jar is copied into the mod loader's version folder under the mod loader's own name (for example `1.20.1-forge-47.4.26.jar`). Modern Forge ignores the game jar only when it has this name; otherwise Java sees two copies of Minecraft and refuses to start.
 10. **Natives**: Extracts `.so`, `.dll`, or `.dylib` files from the native jars into the version's `natives/` folder.
@@ -73,6 +73,7 @@ The launcher is a single script that runs these stages in order:
 - **Automatic Java selection**: Uses Java 8, 17, 21, or 25 depending on what each version needs.
 - **Shared downloads**: Libraries and assets are downloaded once and reused by every version.
 - **SHA1 verification**: Skips valid files and repairs missing or corrupted ones automatically.
+- **Offline play**: Installed versions start without internet, because every file they need, the asset index included, is read from disk once it is valid.
 - **Concurrency limit**: Parallel downloads with a fixed number of workers.
 - **Safe downloads**: Stops with a clear message on any failed HTTP response.
 - **Terminal UI**: Arrow-key menus, a version list you can search by typing, a progress bar while downloading, and an animated rainbow intro.
@@ -359,7 +360,7 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | `limiter(worker, items, limit, title)` | Runs `worker` on every item with at most `limit` running at the same time, and shows a progress bar named `title` |
 | `checkDownloading(url)` | `fetch` that throws a clear error on any non-OK HTTP status |
 | `checkSha1(filePath, sha1)` | Returns `true` only if the file exists and its SHA1 matches |
-| `downloadClientJar`, `downloadLibrary`, `getAssetIndex`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
+| `downloadClientJar`, `downloadLibrary`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
 | `printWithMargin(text, encoding, callback)` | Replaces `process.stdout.write`: adds the margin at the start of every line, then prints |
