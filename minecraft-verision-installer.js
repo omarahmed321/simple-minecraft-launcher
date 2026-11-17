@@ -471,7 +471,23 @@ if (latestVersion && latestVersion !== localPackage.version) {
     p.cancel("Cancelled");
     process.exit(0);
   }
-  if (wantsUpdate) await updateLauncher();
+  if (wantsUpdate) {
+    try {
+      await updateLauncher();
+
+      // a new version can need new packages
+      p.log.step("Installing new packages");
+      const install = spawnSync("npm", ["install"], { cwd: BASE_DIR, stdio: "ignore", shell: true });
+      if (install.status !== 0) throw new Error("npm install failed");
+
+      // start the updated launcher in this same window and close this old one when it closes
+      p.outro(`Updated to ${latestVersion}, starting the new version`);
+      const newLauncher = spawnSync(process.execPath, process.argv.slice(1), { stdio: "inherit" });
+      process.exit(newLauncher.status ?? 0);
+    } catch {
+      p.log.warn("Update failed, keeping the current version.");
+    }
+  }
 }
 //--------- Profile
 const profiles = await loadProfiles();

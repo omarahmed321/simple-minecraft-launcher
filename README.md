@@ -75,6 +75,7 @@ The launcher is a single script that runs these stages in order:
 - **Shared downloads**: Libraries and assets are downloaded once and reused by every version.
 - **SHA1 verification**: Skips valid files and repairs missing or corrupted ones automatically.
 - **Offline play**: Installed versions start without internet, because every file they need, the asset index included, is read from disk once it is valid.
+- **Auto-update**: At startup the launcher checks GitHub for a newer version, asks before updating, keeps `settings.json`, `profiles.json`, and `.minecraft`, installs any new packages, and restarts itself. With no internet, or if the update fails, it carries on with the current version.
 - **Concurrency limit**: Parallel downloads with a fixed number of workers.
 - **Safe downloads**: Stops with a clear message on any failed HTTP response.
 - **Terminal UI**: Arrow-key menus, a version list you can search by typing, a progress bar while downloading, and an animated rainbow intro.
@@ -172,7 +173,7 @@ curl -L -o launcher.zip https://github.com/omarahmed321/simple-minecraft-launche
 
 `curl` and `tar` are built into Windows 10 and 11. This command is for Command Prompt; in PowerShell, open `cmd` first.
 
-Both commands create a `simple-minecraft-launcher-instances-supported-version` folder in the folder the terminal is opened in. After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside that folder.
+Both commands create a `simple-minecraft-launcher-instances-supported-version` folder in the folder the terminal is opened in. After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside that folder. This install updates itself: when a new version is out, the launcher asks at startup.
 
 **Without a terminal:** switch to the `instances-supported-version` branch on the repository page, click **Code**, then **Download ZIP**, extract it, and double-click `install.bat` (Windows) or run `./install.sh` (Linux).
 
@@ -216,6 +217,8 @@ Then open the folder and double-click **`install.bat`**.
 `install.bat` installs Node.js and Java, opens the launcher folder in File Explorer so you can see where it is, then opens `run.bat` in a new window through Explorer, so the new window already sees the installed programs. On Linux, `install.sh` calls `run.sh` directly.
 
 After the first setup, start the launcher with **`run.sh`** (Linux) or **`run.bat`** (Windows). They skip the system installation, run `npm install` only if `node_modules` is missing, and start the launcher.
+
+**Updating a `git clone`:** the launcher does not auto-update a folder that has `.git` in it, so your local changes are never overwritten. Run `git pull` and then `npm install` instead.
 
 ### Option 2: Manual setup
 
