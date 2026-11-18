@@ -14,6 +14,22 @@ import {
   copyFile,
 } from "node:fs/promises";
 
+
+
+
+
+//--------- restart manager
+// the first copy only keeps running the real launcher again every time it closes with code 2
+if (!process.env.LAUNCHER_CHILD) {
+  let launcher;
+  do {
+    launcher = spawnSync(process.execPath, process.argv.slice(1), {
+      stdio: "inherit",
+      env: { ...process.env, LAUNCHER_CHILD: "1" },
+    });
+  } while (launcher.status === 2);
+  process.exit(launcher.status ?? 0);
+}
 //--------- main settings
 
 //---- default settings settings.json next to the launcher overrides them
@@ -478,7 +494,16 @@ async function updateLauncher() {
     );
   }
 }
+// closes with code 2 so the restart manager opens a fresh launcher
+function restartLauncher() {
+  process.exit(2);
+}
 
+
+
+
+
+//-------- Update Checking
 // checks if there is a newier version
 const localPackage = JSON.parse(
   await readFile(path.join(BASE_DIR, "package.json"), "utf8"),
@@ -551,8 +576,10 @@ const isLocal = await p.select({
   options: [
     { value: 1, label: "run an installed version" },
     { value: 2, label: "install new version " },
+    { value: "exit", label: "Exit" },
   ],
 });
+if (isLocal === "exit") process.exit(0);
 if (p.isCancel(isLocal)) {
   p.cancel("Cancelled");
   process.exit(0);
@@ -562,12 +589,17 @@ const selectedVersion = await p.autocomplete({
   message: "Choose version:",
   placeholder: "write here the version",
   maxItems: 8,
-  options: shownVersions.map((version) => ({
-    value: version,
-    label: version.id,
-    hint: version.type,
-  })),
+  options: [
+    { value: "back", label: "← Back" },
+    ...shownVersions.map((version) => ({
+      value: version,
+      label: version.id,
+      hint: version.type,
+    })),
+  ],
+
 });
+if (selectedVersion === "back") restartLauncher();
 if (p.isCancel(selectedVersion)) {
   p.cancel("Cancelled");
   process.exit(0);
@@ -876,4 +908,5 @@ minecraft.on("error", (error) => {
 
 minecraft.on("close", (code) => {
   console.log("Minecraft exited with code:", code);
+  restartLauncher();
 });
