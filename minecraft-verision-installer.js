@@ -1018,6 +1018,14 @@ const javaArguments = [
 // save the checked files so the next launch skips hashing them
 await writeFile(VERIFIED_PATH, JSON.stringify(verified));
 
+// after installing ask first since the user may only want the files ready for later
+if (action === "install") {
+  const wantsToPlay = await p.confirm({
+    message: `${selectedVersion.id} is installed. Play now?`,
+  });
+  if (p.isCancel(wantsToPlay) || !wantsToPlay) restartLauncher();
+}
+
 //--------- outro lines with clack
 p.outro("Launching");
 await showAnimatedText("Yo Have Fun", OUTRO_ANIMATION_TIME);
