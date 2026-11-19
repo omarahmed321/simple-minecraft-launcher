@@ -186,7 +186,7 @@ const minecraftArch = ARCH_MAP[process.arch];
 async function fetchAllVersions(isLocal) {
   let shownVersions;
 
-    if (Number(isLocal) === 1 || Number(isLocal) === 3)  {
+  if (Number(isLocal) === 1 || Number(isLocal) === 3) {
     const installedIds = await getInstalledVersions();
     shownVersions = installedIds.map((id) => {
       return { id: id, type: "installed" };
@@ -248,15 +248,20 @@ async function limiter(worker, assets, limit, title) {
   await Promise.all(runners);
   bar.stop(`${title} done`);
 }
-// check server response like if its 5xx error or 4xx error
+
+// tries a download 3 times since one bad second in the internet should not stop everything
 async function checkDownloading(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(
-      `lets say here that we are : ${response.status} and the url is:  ${url} `,
-    );
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return response;
+      if (attempt === 3)
+        throw new Error(`download failed with ${response.status}: ${url}`);
+    } catch (error) {
+      if (attempt === 3) throw error;
+    }
+    await sleep(1000 * attempt);
   }
-  return response;
 }
 
 // checks a file against its sha1 but skips the hashing when it passed before and did not change since
@@ -277,7 +282,7 @@ async function checkSha1(filePath, expectedSha1) {
   const hash = crypto.createHash("sha1");
   for await (const piece of createReadStream(filePath)) hash.update(piece);
   const sha1 = hash.digest("hex");
-  
+
   if (sha1 !== expectedSha1) return false;
   verified[key] = [size, mtimeMs, expectedSha1];
   return true;
