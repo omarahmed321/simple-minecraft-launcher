@@ -749,7 +749,8 @@ await downloadClientJar(versionJson.downloads.client.url);
 let classpathJar = jarPath;
 if (jarId !== selectedVersion.id) {
   classpathJar = path.join(versionDir, `${selectedVersion.id}.jar`);
-  await copyFile(jarPath, classpathJar);
+  // copy only once since the game jar never changes
+  if (!existsSync(classpathJar)) await copyFile(jarPath, classpathJar);
 }
 
 //--------- Libraries
@@ -827,6 +828,8 @@ for (const native of nativeLibFiles) {
   });
 
   for (const entry of nativeFiles) {
+    // skip files that are already extracted from an earlier launch
+    if (existsSync(path.join(versionDir, "natives", entry.name))) continue;
     zip.extractEntryTo(entry, `${versionDir}/natives`, false, true);
   }
 }
