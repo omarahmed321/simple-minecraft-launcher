@@ -183,15 +183,15 @@ const minecraftArch = ARCH_MAP[process.arch];
 
 // function that fetch all version to show for the user
 
-async function fetchAllVersions(isLocal) {
+async function fetchAllVersions(action) {
   let shownVersions;
 
-  if (Number(isLocal) === 1 || Number(isLocal) === 3) {
+    if (action === "play" || action === "repair") {
     const installedIds = await getInstalledVersions();
     shownVersions = installedIds.map((id) => {
       return { id: id, type: "installed" };
     });
-  } else if (Number(isLocal) === 2) {
+  } else if (action === "install") {
     const response = await checkDownloading(MANIFEST_URL);
     const manifest = await response.json();
     shownVersions = manifest.versions;
@@ -518,6 +518,46 @@ async function createProfile(profiles) {
   return profile;
 }
 
+// lets the user change one setting from inside the launcher and saves it to settings.json
+async function editSettings() {
+  const currentSettings = { ...DEFAULT_SETTINGS, ...savedSettings };
+
+  const name = await p.select({
+    message: "which setting you wanna change ?",
+    options: [
+      { value: "back", label: "← Back" },
+      ...Object.keys(DEFAULT_SETTINGS).map((name) => ({
+        value: name,
+        label: name,
+        hint: String(currentSettings[name]),
+      })),
+    ],
+  });
+  if (p.isCancel(name) || name === "back") return;
+    // download limits need at least 1 or nothing would download
+  const min = name.endsWith("_LIMIT") ? 1 : 0;
+
+  const value = await p.text({
+    message: `New value for ${name}`,
+    initialValue: String(currentSettings[name]),
+    validate: (text) => {
+      if (name === "JAVA_PATH") {
+        if (!text || text.trim() === "") return "write a java path or just java";
+        return;
+      }
+      const number = Number(text);
+      if (!Number.isInteger(number) || number < min) {
+        return `must be a whole number from ${min} and up`;
+      }
+    },
+  });
+  if (p.isCancel(value)) return;
+
+  currentSettings[name] = name === "JAVA_PATH" ? value.trim() : Number(value);
+  await writeFile(SETTINGS_PATH, JSON.stringify(currentSettings, null, 2));
+  p.log.success(`${name} saved`);
+}
+
 // returns the newest version number on GitHub or null with no internet
 async function getLatestVersion() {
   try {
@@ -632,25 +672,30 @@ const username = profile.name;
 const memNumber = profile.memory;
 
 // the questions
-
-const isLocal = await p.select({
+const action = await p.select({
   message: "What do you wanna do ?",
   options: [
-    { value: 1, label: "run an installed version" },
-    { value: 2, label: "install new version " },
-    { value: 3, label: "repair an installed version" },
+    { value: "play", label: "run an installed version" },
+    { value: "install", label: "install new version" },
+    { value: "repair", label: "repair an installed version" },
+    { value: "settings", label: "Settings" },
     { value: "exit", label: "Exit" },
   ],
 });
-if (isLocal === "exit") process.exit(0);
-// forget every checked file so this launch hashes them all again
-if (isLocal === 3) verified = {};
-
-if (p.isCancel(isLocal)) {
+if (p.isCancel(action)) {
   p.cancel("Cancelled");
   process.exit(0);
 }
-const shownVersions = await fetchAllVersions(isLocal);
+if (action === "exit") process.exit(0);
+// settings are read once when the launcher starts so it opens again to use the new ones
+if (action === "settings") {
+  await editSettings();
+  restartLauncher();
+}
+// forget every checked file so this launch hashes them all again
+if (action === "repair") verified = {};
+
+const shownVersions = await fetchAllVersions(action);
 const selectedVersion = await p.autocomplete({
   message: "Choose version:",
   placeholder: "write here the version",
