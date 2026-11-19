@@ -12,6 +12,7 @@ import {
   readFile,
   readdir,
   copyFile,
+  stat,
 } from "node:fs/promises";
 // the name that shows in btop and ps
 process.title = "simple-launcher";
@@ -66,6 +67,7 @@ const RESET = "\x1b[39m";
 const BASE_DIR = import.meta.dirname;
 const MINECRAFT_DIR = path.join(BASE_DIR, ".minecraft");
 const PROFILES_PATH = path.join(BASE_DIR, "profiles.json");
+const VERIFIED_PATH = path.join(MINECRAFT_DIR, "verified.json");
 const SETTINGS_PATH = path.join(BASE_DIR, "settings.json");
 const MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -108,6 +110,17 @@ const {
   MARGIN_LEFT,
   MARGIN_TOP,
 } = { ...DEFAULT_SETTINGS, ...savedSettings };
+
+//--------- verified.json
+// files that already passed sha1 with their size and time so they are not hashed again
+let verified = {};
+if (existsSync(VERIFIED_PATH)) {
+  try {
+    verified = JSON.parse(await readFile(VERIFIED_PATH, "utf8"));
+  } catch {
+    verified = {};
+  }
+}
 
 //--------- margin
 // the 3 ways a printed line can start: a new line or clack jumping back to the line start
@@ -173,7 +186,7 @@ const minecraftArch = ARCH_MAP[process.arch];
 async function fetchAllVersions(isLocal) {
   let shownVersions;
 
-  if (Number(isLocal) === 1) {
+    if (Number(isLocal) === 1 || Number(isLocal) === 3)  {
     const installedIds = await getInstalledVersions();
     shownVersions = installedIds.map((id) => {
       return { id: id, type: "installed" };
@@ -245,12 +258,26 @@ async function checkDownloading(url) {
   }
   return response;
 }
-// calculates the files to sha1 and compare it to the compelete one in the original database Mojang's one
+
+// checks a file against its sha1 but skips the hashing when it passed before and did not change since
 async function checkSha1(filePath, expectedSha1) {
   if (!existsSync(filePath)) return false;
+  const key = path.relative(MINECRAFT_DIR, filePath);
+  const { size, mtimeMs } = await stat(filePath);
+  const saved = verified[key];
+  if (
+    saved &&
+    saved[0] === size &&
+    saved[1] === mtimeMs &&
+    saved[2] === expectedSha1
+  )
+    return true;
+
   const data = await readFile(filePath);
   const sha1 = crypto.createHash("sha1").update(data).digest("hex");
-  return sha1 === expectedSha1;
+  if (sha1 !== expectedSha1) return false;
+  verified[key] = [size, mtimeMs, expectedSha1];
+  return true;
 }
 
 //  check the required version of java for the version / and see the version on the system
@@ -603,10 +630,14 @@ const isLocal = await p.select({
   options: [
     { value: 1, label: "run an installed version" },
     { value: 2, label: "install new version " },
+    { value: 3, label: "repair an installed version" },
     { value: "exit", label: "Exit" },
   ],
 });
 if (isLocal === "exit") process.exit(0);
+// forget every checked file so this launch hashes them all again
+if (isLocal === 3) verified = {};
+
 if (p.isCancel(isLocal)) {
   p.cancel("Cancelled");
   process.exit(0);
@@ -924,6 +955,10 @@ const javaArguments = [
   versionJson.mainClass,
   ...finalGameArguments,
 ];
+
+//--------- verified.json save
+// save the checked files so the next launch skips hashing them
+await writeFile(VERIFIED_PATH, JSON.stringify(verified));
 
 //--------- outro lines with clack
 p.outro("Launching");
