@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, createReadStream } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import * as p from "@clack/prompts";
 import {
@@ -273,8 +273,11 @@ async function checkSha1(filePath, expectedSha1) {
   )
     return true;
 
-  const data = await readFile(filePath);
-  const sha1 = crypto.createHash("sha1").update(data).digest("hex");
+  // reads the file in small pieces so a big jar never sits in ram all at once
+  const hash = crypto.createHash("sha1");
+  for await (const piece of createReadStream(filePath)) hash.update(piece);
+  const sha1 = hash.digest("hex");
+  
   if (sha1 !== expectedSha1) return false;
   verified[key] = [size, mtimeMs, expectedSha1];
   return true;
