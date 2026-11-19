@@ -17,16 +17,20 @@ import {
 process.title = "simple-launcher";
 
 // linux and mac can swap the launcher with a fresh copy so no manager is needed
-const canSwap = process.platform !== "win32" && typeof process.execve === "function";
+const canSwap =
+  process.platform !== "win32" && typeof process.execve === "function";
+
+// true when the launcher opens again after a game or back
+const isRestart = process.env.LAUNCHER_CHILD === "restart";
 
 //--------- restart manager
 // on windows the first copy only keeps running the real launcher again every time it closes with code 2
-if (!canSwap && !process.env.LAUNCHER_CHILD)  {
+if (!canSwap && !process.env.LAUNCHER_CHILD) {
   let launcher;
   do {
     launcher = spawnSync(process.execPath, process.argv.slice(1), {
       stdio: "inherit",
-      env: { ...process.env, LAUNCHER_CHILD: "1" },
+      env: { ...process.env, LAUNCHER_CHILD: launcher ? "restart" : "first" },
     });
   } while (launcher.status === 2);
   process.exit(launcher.status ?? 0);
@@ -135,7 +139,7 @@ process.stdout.write = printWithMargin;
 process.stdout.write("\n".repeat(validMargin("MARGIN_TOP", MARGIN_TOP, 20)));
 //--------- intro  lines with clack
 console.log(PURPLE + LOGO.join("\n") + RESET);
-await showAnimatedText("made by Omar", INTRO_ANIMATION_TIME);
+await showAnimatedText("made by Omar", isRestart ? 0 : INTRO_ANIMATION_TIME);
 console.log();
 p.intro("Simple Launcher");
 
@@ -409,7 +413,8 @@ async function findJava(requiredJava) {
       if (!existsSync(javaPath)) continue;
       const javaHome = path.join(baseDir, folder);
       // the release file is instant and starting java is only a backup for folders without it
-      const version = (await readJavaVersion(javaHome)) ?? getInstalledJavaVersion(javaPath);
+      const version =
+        (await readJavaVersion(javaHome)) ?? getInstalledJavaVersion(javaPath);
       if (version === requiredJava) return javaPath;
     }
   }
@@ -513,17 +518,17 @@ async function updateLauncher() {
 // swaps this process with a fresh launcher or asks the manager on windows to open one
 function restartLauncher() {
   if (canSwap) {
-    process.execve(process.execPath, [process.execPath, ...process.argv.slice(1)], {
-      ...process.env,
-      LAUNCHER_CHILD: "restart",
-    });
+    process.execve(
+      process.execPath,
+      [process.execPath, ...process.argv.slice(1)],
+      {
+        ...process.env,
+        LAUNCHER_CHILD: "restart",
+      },
+    );
   }
   process.exit(2);
 }
-
-
-
-
 
 //-------- Update Checking
 // checks if there is a newier version
@@ -531,7 +536,7 @@ const localPackage = JSON.parse(
   await readFile(path.join(BASE_DIR, "package.json"), "utf8"),
 );
 const isDevCopy = existsSync(path.join(BASE_DIR, ".git"));
-const latestVersion = isDevCopy ? null : await getLatestVersion();
+const latestVersion = isDevCopy || isRestart ? null : await getLatestVersion();
 
 if (latestVersion && latestVersion !== localPackage.version) {
   const wantsUpdate = await p.confirm({
@@ -619,7 +624,6 @@ const selectedVersion = await p.autocomplete({
       hint: version.type,
     })),
   ],
-
 });
 if (selectedVersion === "back") restartLauncher();
 if (p.isCancel(selectedVersion)) {
@@ -711,7 +715,8 @@ for (const lib of versionJson.libraries) {
 const javaPath = await findJava(requiredJava);
 // java is inside home/bin so going up twice gives the java folder
 const javaHome = path.dirname(path.dirname(javaPath));
-const installedJava = (await readJavaVersion(javaHome)) ?? getInstalledJavaVersion(javaPath);
+const installedJava =
+  (await readJavaVersion(javaHome)) ?? getInstalledJavaVersion(javaPath);
 p.log.info(`Installed Java: ${installedJava}`);
 if (installedJava === null) {
   p.cancel(
