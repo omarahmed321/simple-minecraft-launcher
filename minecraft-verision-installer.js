@@ -13,14 +13,15 @@ import {
   readdir,
   copyFile,
 } from "node:fs/promises";
+// the name that shows in btop and ps
+process.title = "simple-launcher";
 
-
-
-
+// linux and mac can swap the launcher with a fresh copy so no manager is needed
+const canSwap = process.platform !== "win32" && typeof process.execve === "function";
 
 //--------- restart manager
-// the first copy only keeps running the real launcher again every time it closes with code 2
-if (!process.env.LAUNCHER_CHILD) {
+// on windows the first copy only keeps running the real launcher again every time it closes with code 2
+if (!canSwap && !process.env.LAUNCHER_CHILD)  {
   let launcher;
   do {
     launcher = spawnSync(process.execPath, process.argv.slice(1), {
@@ -494,8 +495,15 @@ async function updateLauncher() {
     );
   }
 }
-// closes with code 2 so the restart manager opens a fresh launcher
+
+// swaps this process with a fresh launcher or asks the manager on windows to open one
 function restartLauncher() {
+  if (canSwap) {
+    process.execve(process.execPath, [process.execPath, ...process.argv.slice(1)], {
+      ...process.env,
+      LAUNCHER_CHILD: "restart",
+    });
+  }
   process.exit(2);
 }
 
