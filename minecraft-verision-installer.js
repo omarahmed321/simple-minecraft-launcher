@@ -264,6 +264,17 @@ function getInstalledJavaVersion(javaPath) {
   if (parts[0] === "1") return parseInt(parts[1]);
   return parseInt(parts[0]);
 }
+// reads the java version from the release file in the java folder so java does not have to start
+async function readJavaVersion(javaHome) {
+  const releasePath = path.join(javaHome, "release");
+  if (!existsSync(releasePath)) return null;
+  const text = await readFile(releasePath, "utf8");
+  const versionText = text.split('JAVA_VERSION="')[1];
+  if (!versionText) return null;
+  const parts = versionText.split('"')[0].split(".");
+  if (parts[0] === "1") return parseInt(parts[1]);
+  return parseInt(parts[0]);
+}
 
 //  function makes a 128 bit hash uuid for every different user
 function getOfflineUUID(username) {
@@ -396,7 +407,10 @@ async function findJava(requiredJava) {
     for (const folder of await readdir(baseDir)) {
       const javaPath = path.join(baseDir, folder, "bin", javaFile);
       if (!existsSync(javaPath)) continue;
-      if (getInstalledJavaVersion(javaPath) === requiredJava) return javaPath;
+      const javaHome = path.join(baseDir, folder);
+      // the release file is instant and starting java is only a backup for folders without it
+      const version = (await readJavaVersion(javaHome)) ?? getInstalledJavaVersion(javaPath);
+      if (version === requiredJava) return javaPath;
     }
   }
   p.log.warn(`Java ${requiredJava} not found, using default java instead`);
@@ -695,7 +709,9 @@ for (const lib of versionJson.libraries) {
 //--------- Java Check
 
 const javaPath = await findJava(requiredJava);
-const installedJava = getInstalledJavaVersion(javaPath);
+// java is inside home/bin so going up twice gives the java folder
+const javaHome = path.dirname(path.dirname(javaPath));
+const installedJava = (await readJavaVersion(javaHome)) ?? getInstalledJavaVersion(javaPath);
 p.log.info(`Installed Java: ${installedJava}`);
 if (installedJava === null) {
   p.cancel(
