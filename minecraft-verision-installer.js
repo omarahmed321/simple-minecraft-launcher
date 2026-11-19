@@ -149,6 +149,10 @@ function printWithMargin(text, encoding, callback) {
 }
 
 process.stdout.write = printWithMargin;
+
+// a fresh screen after settings back or a game instead of piling up under the old one
+if (isRestart) console.clear();
+
 process.stdout.write("\n".repeat(validMargin("MARGIN_TOP", MARGIN_TOP, 20)));
 //--------- intro  lines with clack
 console.log(PURPLE + LOGO.join("\n") + RESET);
@@ -186,7 +190,7 @@ const minecraftArch = ARCH_MAP[process.arch];
 async function fetchAllVersions(action) {
   let shownVersions;
 
-    if (action === "play" || action === "repair") {
+  if (action === "play" || action === "repair") {
     const installedIds = await getInstalledVersions();
     shownVersions = installedIds.map((id) => {
       return { id: id, type: "installed" };
@@ -534,7 +538,7 @@ async function editSettings() {
     ],
   });
   if (p.isCancel(name) || name === "back") return;
-    // download limits need at least 1 or nothing would download
+  // download limits need at least 1 or nothing would download
   const min = name.endsWith("_LIMIT") ? 1 : 0;
 
   const value = await p.text({
@@ -542,7 +546,8 @@ async function editSettings() {
     initialValue: String(currentSettings[name]),
     validate: (text) => {
       if (name === "JAVA_PATH") {
-        if (!text || text.trim() === "") return "write a java path or just java";
+        if (!text || text.trim() === "")
+          return "write a java path or just java";
         return;
       }
       const number = Number(text);
