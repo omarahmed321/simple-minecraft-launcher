@@ -371,60 +371,33 @@ async function getVersionJson(versionUrl) {
   const json = await response.json();
   return json;
 }
-// download client jar lol you could tell
-async function downloadClientJar(clientUrl) {
-  if (await checkSha1(`${jarPath}`, versionJson.downloads.client.sha1)) return;
-  p.log.step("Downloading client jar");
-  const response = await checkDownloading(clientUrl);
-  const jarFile = await response.arrayBuffer();
-  await writeFile(`${jarPath}`, Buffer.from(jarFile));
-  return jarFile;
+
+// downloads a file unless it is already there and valid
+async function downloadFile(url, filePath, sha1) {
+  if (await checkSha1(filePath, sha1)) return;
+  const response = await checkDownloading(url);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, Buffer.from(await response.arrayBuffer()));
+  // checks the new file once so a broken download is caught and a good one is saved in verified.json
+  await checkSha1(filePath, sha1);
 }
-// download library
+
+
+// downloads one library unless forge made it on its own and it has no url
 async function downloadLibrary(file) {
   if (!file.url) return;
-  const libUrl = file.url;
-  const path = file.path;
-  if (await checkSha1(`${MINECRAFT_DIR}/libraries/${path}`, file.sha1)) return;
-
-  const response = await checkDownloading(libUrl);
-  const jarFile = await response.arrayBuffer();
-  await mkdir(
-    `${MINECRAFT_DIR}/libraries/` + path.substring(0, path.lastIndexOf("/")),
-    { recursive: true },
-  );
-  await writeFile(`${MINECRAFT_DIR}/libraries/${path}`, Buffer.from(jarFile));
+  await downloadFile(file.url, path.join(MINECRAFT_DIR, "libraries", file.path), file.sha1);
 }
 
-// download asset
-async function downloadAsset(hash, path) {
-  if (
-    await checkSha1(
-      `${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
-      hash,
-    )
-  )
-    return;
-
-  const response = await checkDownloading(
-    `${ASSETS_URL}/${hash.substring(0, 2)}/${hash}`,
+// downloads one asset from its [name, info] pair in the asset index
+async function downloadAsset([, asset]) {
+  // assets are saved in a folder named after the first 2 letters of their sha1
+  const hashPath = `${asset.hash.substring(0, 2)}/${asset.hash}`;
+  await downloadFile(
+    `${ASSETS_URL}/${hashPath}`,
+    path.join(MINECRAFT_DIR, "assets", "objects", hashPath),
+    asset.hash,
   );
-  const data = await response.arrayBuffer();
-
-  await mkdir(`${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}`, {
-    recursive: true,
-  });
-  await writeFile(
-    `${MINECRAFT_DIR}/assets/objects/${hash.substring(0, 2)}/${hash}`,
-    Buffer.from(data),
-  );
-  return data;
-}
-// download one asset to make it work with the limiter
-async function downloadOneAsset(item) {
-  const path = item[0];
-  const asset = item[1];
-  return downloadAsset(asset.hash, path);
 }
 
 // returns the name of folders in directory
@@ -948,8 +921,12 @@ if (selectedVersion.url) {
     JSON.stringify(versionJson),
   );
 }
-
-await downloadClientJar(versionJson.downloads.client.url);
+p.log.step("client.jar");
+await downloadFile(
+  versionJson.downloads.client.url,
+  jarPath,
+  versionJson.downloads.client.sha1,
+);
 // forge ignores the game jar only if it has the version's own name
 let classpathJar = jarPath;
 if (jarId !== selectedVersion.id) {
@@ -991,7 +968,7 @@ await copyFile(savedIndexPath, indexPath);
 
 const assetIndex = JSON.parse(await readFile(indexPath, "utf8"));
 const assetList = Object.entries(assetIndex.objects);
-await limiter(downloadOneAsset, assetList, ASSET_DOWNLOAD_LIMIT, "Assets");
+await limiter(downloadAsset, assetList, ASSET_DOWNLOAD_LIMIT, "Assets");
 
 //--------- Legacy assets (versions before 1.7.3 look for files by name, not by hash)
 let gameAssetsDir = `${MINECRAFT_DIR}/assets`;
