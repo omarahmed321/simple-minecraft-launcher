@@ -259,13 +259,17 @@ async function checkDownloading(url) {
     try {
       const response = await fetch(url);
       if (response.ok) return response;
-      if (attempt === 3)
-        throw new Error(`download failed with ${response.status}: ${url}`);
-    } catch (error) {
-      if (attempt === 3) throw error;
+    } catch {
+      // no internet or the server did not answer so it tries again
     }
-    await sleep(1000 * attempt);
+    if (attempt < 3) await sleep(1000 * attempt);
   }
+  // still failing after 3 tries so it goes back to the menu instead of crashing
+  p.log.error(
+    `Could not download ${path.basename(url)}. Check your internet and try again.`,
+  );
+  await sleep(3000);
+  restartLauncher();
 }
 
 // checks a file against its sha1 but skips the hashing when it passed before and did not change since
