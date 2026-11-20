@@ -37,7 +37,7 @@ It keeps every game file in a standard `.minecraft` folder, so the official **Fa
 ## Architecture
 The launcher is a single script that runs these stages in order:
 
-1. **Source**: Asks whether to run an **installed** version or **install a new** one.
+1. **Source**: Asks what to do: run an **installed** version, **install a new** one, **repair** an installed one, open **Settings**, or **Exit**.
    - **Installed**: Lists every folder in `.minecraft/versions/` that has a `<id>/<id>.json` file. This includes versions made by the Fabric, Forge, and NeoForge installers. Works without internet.
    - **New**: Downloads Mojang's version manifest and lists every version with its type (`release`, `snapshot`, `old_beta`, `old_alpha`).
 2. **Questions**: Asks for a profile (an in-game username and the maximum memory in GB, saved in `profiles.json`), then the version (a searchable list). Every answer is validated before anything is downloaded.
@@ -48,16 +48,18 @@ The launcher is a single script that runs these stages in order:
    - **Legacy format** (before 1.19): natives live inside one library under `natives` and `downloads.classifiers`.
    - **Maven format** (Fabric, old Forge): only a `name` like `net.fabricmc:fabric-loader:0.19.5` and a repository `url`. The path is built from the name (`net/fabricmc/fabric-loader/0.19.5/fabric-loader-0.19.5.jar`).
    - Libraries that the Forge installer generated itself have an empty `url` and are used from disk without downloading.
-6. **Java selection**: Reads the required Java version (for example 8, 17, 21, or 25) and looks for an installed Java with exactly that version in `/usr/lib/jvm` (Linux) or `C:\Program Files\Eclipse Adoptium` (Windows). If none matches, it falls back to the default `java`.
-7. **Downloads**: Downloads the client jar, the libraries, the asset index, and every asset object. Each file, the asset index included, is downloaded only if it is missing or its SHA1 does not match. Libraries and assets download in parallel with a **concurrency limit** (8 and 16 at a time).
-8. **Verification**: Before downloading, every file that already exists is checked against its **SHA1**. Valid files are skipped; missing, partial, or corrupted files are downloaded again. Failed HTTP responses stop the launcher instead of writing broken files.
-9. **Client jar for mod loaders**: The base jar is copied into the mod loader's version folder under the mod loader's own name (for example `1.20.1-forge-47.4.26.jar`). Modern Forge ignores the game jar only when it has this name; otherwise Java sees two copies of Minecraft and refuses to start.
-10. **Natives**: Extracts `.so`, `.dll`, or `.dylib` files from the native jars into the version's `natives/` folder.
+6. **Java selection**: Reads the required Java version (for example 8, 17, 21, or 25) and looks for an installed Java with exactly that version in `/usr/lib/jvm` (Linux) or `C:\Program Files\Eclipse Adoptium` (Windows). It reads each Java's version from the `release` file in its folder instead of starting Java, and only runs `java -version` for a folder without that file. If none matches, it falls back to the default `java`. If the Java it ends up with is older than the version needs, it says so and goes back to the menu.
+7. **Downloads**: Downloads the client jar, the libraries, the asset index, and every asset object. Each file, the asset index included, is downloaded only if it is missing or its SHA1 does not match. Libraries and assets download in parallel with a **concurrency limit** (8 and 16 at a time). A failed download is tried 3 times; if it still fails, the launcher says so and goes back to the menu.
+   - **Asset index**: Different versions can use the same index name (for example `36.json`) with different content. A copy of each index is also kept under its SHA1 (`indexes/<sha1>.json`), and the right one is copied to the name the game reads before every launch, so switching between those versions never needs the internet.
+8. **Verification**: Before downloading, every file that already exists is checked against its **SHA1**. Valid files are skipped; missing, partial, or corrupted files are downloaded again. Files are hashed in small pieces, so a large jar never sits in memory all at once.
+   - **`verified.json`**: Every file that passes its SHA1 check is saved in `.minecraft/verified.json` with its size and modification time. On later launches a file whose size and time have not changed is skipped without reading it, which makes starting an installed version about 10 times faster. A changed file is hashed again. **Repair** clears this list so every file is hashed again.
+9. **Client jar for mod loaders**: The base jar is copied once into the mod loader's version folder under the mod loader's own name (for example `1.20.1-forge-47.4.26.jar`). Modern Forge ignores the game jar only when it has this name; otherwise Java sees two copies of Minecraft and refuses to start.
+10. **Natives**: Extracts `.so`, `.dll`, or `.dylib` files from the native jars into the version's `natives/` folder. Files that are already there from an earlier launch are skipped.
 11. **Arguments**: Builds JVM and game arguments from the JSON:
     - **Modern format** (1.13+): evaluates the `rules` on each entry in `arguments.jvm` and `arguments.game`.
     - **Legacy format** (before 1.13): splits `minecraftArguments` into game arguments and adds the required JVM arguments (`-Djava.library.path` and `-cp`).
 12. **Placeholders**: Replaces every `${...}` placeholder (classpath, directories, username, UUID, library directory, and more) with real values.
-13. **Launch**: Starts the selected Java with the final arguments and streams the game's output to the terminal.
+13. **Launch**: Starts the selected Java with the final arguments and streams the game's output to the terminal. When the game closes, the launcher starts over at the profile menu (see [Staying open](#staying-open)).
 
 **Files vs game data:** `versions/`, `libraries/`, and `assets/` hold what is needed to *start* a version; the launcher writes them. `instances/<version>/` holds what the game creates *while you play* (mods, worlds, settings, logs); the game writes it. Every version gets its own instance, so mods and worlds never mix between versions.
 
@@ -67,6 +69,10 @@ The launcher is a single script that runs these stages in order:
 
 ## Features
 - **Profiles**: Save a username and memory once, then pick the profile at every start instead of typing them again.
+- **Stays open**: After the game closes, the launcher goes back to the menu, so you can play another version without starting it again. **← Back** in the version list and **Exit** in the menu are always there.
+- **Settings menu**: Change any setting from inside the launcher. Each value is checked before it is saved.
+- **Repair**: Checks every file of a version against its SHA1 again and downloads any broken one.
+- **Fast relaunch**: Files that were already verified are not hashed again (see `verified.json` above), and Java is found without starting it.
 - **Installed or new**: Run versions already in `.minecraft`, or pick any official version or snapshot to download.
 - **Mod loader support**: Runs versions installed by the official Fabric, Forge, and NeoForge installers (see [Mod Loaders](#mod-loaders)).
 - **Standard `.minecraft` layout**: `versions/<id>/<id>.jar`, `<id>.json`, `libraries/`, `assets/`, and `launcher_profiles.json`, so official installers recognize the folder.
@@ -74,10 +80,11 @@ The launcher is a single script that runs these stages in order:
 - **Automatic Java selection**: Uses Java 8, 17, 21, or 25 depending on what each version needs.
 - **Shared downloads**: Libraries and assets are downloaded once and reused by every version.
 - **SHA1 verification**: Skips valid files and repairs missing or corrupted ones automatically.
-- **Offline play**: Installed versions start without internet, because every file they need, the asset index included, is read from disk once it is valid.
+- **Install now, play later**: After installing a new version, the launcher asks whether to play it now or go back to the menu.
+- **Offline play**: Installed versions start without internet, because every file they need, the asset index included, is read from disk once it is valid. This includes versions that share an asset index name.
 - **Auto-update**: At startup the launcher checks GitHub for a newer version, asks before updating, keeps `settings.json`, `profiles.json`, and `.minecraft`, installs any new packages, and restarts itself. With no internet, or if the update fails, it carries on with the current version.
 - **Concurrency limit**: Parallel downloads with a fixed number of workers.
-- **Safe downloads**: Stops with a clear message on any failed HTTP response.
+- **Safe downloads**: Tries every download 3 times. With no internet, or if Mojang does not answer, it shows a clear message and goes back to the menu instead of crashing.
 - **Terminal UI**: Arrow-key menus, a version list you can search by typing, a progress bar while downloading, and an animated rainbow intro.
 - **Input validation**: Checks the username (3 to 16 characters: letters, numbers, `_`) and memory (1 to 32 GB), and asks again instead of exiting when an answer is wrong.
 - **Cross-platform**: Detects Windows or Linux, picks the matching natives, and uses the correct classpath separator.
@@ -273,8 +280,13 @@ made by Omar
 ```
 
 1. **Profile**: pick a saved profile, or "+ create a new profile". The first time, when no profile exists yet, the launcher goes straight to creating one.
-2. **Source**: pick with the arrow keys and press Enter. "run an installed version" lists what is already in `.minecraft` (including Fabric, Forge, and NeoForge); "install new version" downloads one.
-3. **Version**: type part of the version name to filter the list (for example `1.20`), move with the arrow keys, and press Enter.
+2. **Source**: pick with the arrow keys and press Enter.
+   - **run an installed version**: lists what is already in `.minecraft` (including Fabric, Forge, and NeoForge).
+   - **install new version**: downloads one. When it finishes, the launcher asks **Play now?**; choose No to go back to the menu.
+   - **repair an installed version**: checks every file of the version you pick again and downloads any that are broken. Use it if a version crashes for no clear reason.
+   - **Settings**: see [Settings](#settings).
+   - **Exit**: closes the launcher.
+3. **Version**: type part of the version name to filter the list (for example `1.20`), move with the arrow keys, and press Enter. **← Back** at the top of the list goes back to the start.
 
 **Creating a profile** asks two questions:
 
@@ -287,12 +299,19 @@ The first run of a version downloads the client, its libraries, and its assets. 
 
 The launcher prints `Required Java` and `Installed Java` before starting, so you can see which Java it picked.
 
+### Staying open
+When the game closes, the screen is cleared and the launcher starts again at the profile menu. The intro animation and the update check only happen the first time. If something goes wrong (no internet, the wrong Java, a missing base version), the launcher shows the reason for 3 seconds and goes back to the menu instead of closing.
+
+On Linux and macOS the launcher replaces itself with a fresh copy (`process.execve`), so only one `simple-launcher` process is ever running. Windows has no way to do that, so the first copy stays in the background and starts a fresh launcher each time; this costs about 13 MB of memory.
+
 **Offline mode:** The launcher does not sign in to a Microsoft account. Singleplayer and offline-mode servers work; Realms and servers that require authentication do not.
 
 ---
 
 ## Settings
-The settings live in `settings.json` next to the launcher. The launcher creates it with the defaults on the first run. Open it in any text editor, change a value, save, and run the launcher again. Updates never touch this file.
+The settings live in `settings.json` next to the launcher. The launcher creates it with the defaults on the first run. Updates never touch this file.
+
+To change a setting, choose **Settings** in the menu, pick the setting (its current value is shown next to it), and type the new value. The launcher checks the value, saves it, and starts again so the new value is used right away. You can also edit `settings.json` in any text editor.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -305,8 +324,9 @@ The settings live in `settings.json` next to the launcher. The launcher creates 
 | `BAR_RENDERING_DELAY` | `16` | How often the progress bar is redrawn, in milliseconds. Lower values do not download faster; 16 is about 60 redraws per second. |
 | `MARGIN_LEFT` | `4` | Empty space to the left of everything the launcher shows, in characters, from `0` (off) to `40`. Any other value uses the default and prints a message. |
 | `MARGIN_TOP` | `2` | Empty lines above the logo, from `0` (off) to `20`. Any other value uses the default and prints a message. |
+| `VERSIONS_SHOWN_LIMIT` | `8` | How many versions the version list shows at once, from `5`. The list never grows taller than the terminal window. |
 
-With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second.
+With an animation time of `0` the text is printed in plain white and the launcher starts right away. `1000` milliseconds is one second. The two download limits need at least `1`.
 
 A setting you delete from the file goes back to its default. If the file has a mistake in it (a missing `,` or `"`), the launcher says so and stops; fix it, or delete `settings.json` to get the defaults back.
 
@@ -315,7 +335,8 @@ A setting you delete from the file goes back to its default. If the file has a m
 ## Troubleshooting
 - **`Installed Java` is not the number the version needs**: That Java is not installed. Run the setup script again, or install it from the table in [Manual setup](#option-2-manual-setup). On Arch, `archlinux-java status` lists the installed versions.
 - **`ClassCastException ... cannot be cast to class java.net.URLClassLoader`** or **`NoClassDefFoundError: net/minecraft/launchwrapper/...`**: An old Forge version ran on a new Java. Install Java 8.
-- **`<version> needs <base>`**: The mod loader's base version is missing. Run the launcher again, choose "install new version", and pick the base version named in the message.
+- **`<version> needs <base>`**: The mod loader's base version is missing. Choose "install new version" and pick the base version named in the message.
+- **`Minecraft <version> needs Java <n>, but you have Java <m>`**: Install the Java named in the message (run the setup script again), then pick the version again.
 - **`Processor failed, invalid outputs`** (Forge installer): Run the installer with the matching Java (see [Mod Loaders](#mod-loaders)).
 - **`Module minecraft contains package ...`** (modern Forge): The game jar was not renamed. Make sure you are on the latest version of this branch.
 - **`node: error while loading shared libraries: libsimdjson.so...`** (or another `lib...so` file): Node.js is installed but cannot start, because the system is only partly updated. This is common on Arch and CachyOS. Update the whole system, then run `./install.sh` again:
@@ -331,7 +352,9 @@ A setting you delete from the file goes back to its default. If the file has a m
 - **`Cannot find package 'adm-zip'`**, **`'@clack/prompts'`**, or **`'chalk-animation'`**: Run `npm install` in the project folder. This also happens after updating an older copy of the launcher, because new libraries were added.
 - **`No versions found`**: There are no installed versions yet. Choose "install new version" first.
 - **The menus look broken or the arrow keys print letters**: Run the launcher in a real terminal window, not through a pipe or an editor's output panel.
-- **`lets say here that we are : 404 ...`**: A download failed or the connection dropped. Run the launcher again; files that were already verified are skipped.
+- **`Could not download <file>. Check your internet and try again.`**: The download failed 3 times. Check the connection and pick the version again; files that were already verified are skipped.
+- **`profiles.json has a mistake in it`**: The file was edited by hand or saved only halfway. Fix it, or delete it to start with no profiles.
+- **A version crashes and you don't know why**: Choose "repair an installed version" and pick it. Every file is checked again and broken ones are downloaded again.
 - **Game crashes with `UnsatisfiedLinkError`**: Delete `.minecraft/versions/<version>/natives` and run again so the natives are extracted fresh.
 
 ---
@@ -341,13 +364,15 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 
 | Section | Responsibility |
 |---|---|
+| **Restart manager** | `canSwap` and `isRestart`; on Windows the first copy keeps starting a fresh launcher every time one closes with code `2` |
 | **Settings** | `DEFAULT_SETTINGS`, the logo and its colors, then `BASE_DIR`, `MINECRAFT_DIR`, file paths, URLs, and `JAVA_SEARCH_DIRS` |
 | **settings.json** | Creates `settings.json` with the defaults the first time, reads it, and fills in any missing value from `DEFAULT_SETTINGS` |
+| **verified.json** | Loads the list of files that already passed their SHA1 check |
 | **Intro** | Prints the logo, the animated "made by Omar" line, and opens the prompt frame |
 | **Platform** | Detects the OS, CPU architecture, and native file extension |
 | **Helpers** | Shared functions (table below) |
 | **Profile** | Loads `profiles.json`, shows the profile list, or creates a profile |
-| **Questions** | Installed or new, version |
+| **Questions** | Play, install, repair, settings, or exit, then the version |
 | **Version JSON + merge** | Reads or downloads the JSON and merges it with its `inheritsFrom` base |
 | **Libraries list** | Builds the normalized `libFiles` list from every library format |
 | **Java** | Finds the Java that matches the required version |
@@ -356,29 +381,34 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | **Margin** | Wraps `process.stdout.write` so every printed line starts after `MARGIN_LEFT` spaces |
 | **Natives** | Extracts native files into `versions/<version>/natives/` with adm-zip's `extractEntryTo` |
 | **Classpath / Arguments / Replacements** | Builds the final Java command |
-| **Outro / Launch** | Closes the prompt frame, plays the "Yo Have Fun" animation, then starts Java with its output going straight to the terminal (`stdio: "inherit"`) |
+| **verified.json save** | Saves the checked files, and after an install asks whether to play now |
+| **Outro / Launch** | Closes the prompt frame, plays the "Yo Have Fun" animation, then starts Java with its output going straight to the terminal (`stdio: "inherit"`), and starts the launcher again when the game closes |
 
 **Helper functions:**
 
 | Function | Purpose |
 |---|---|
-| `fetchAllVersions(isLocal)` | Returns the installed versions or Mojang's version list |
+| `fetchAllVersions(action)` | Returns the installed versions (play, repair) or Mojang's version list (install) |
 | `getInstalledVersions()` | Lists the folders in `versions/` that contain `<id>/<id>.json` |
 | `getVersionJson(url)` | Downloads a version JSON |
 | `mergeVersionJson(parent, child)` | Merges a mod loader JSON with its base version |
 | `mavenToPath(name)` | Turns `group:artifact:version` into a Maven file path |
 | `findJava(requiredJava)` | Finds an installed Java with the exact major version |
-| `getInstalledJavaVersion(javaPath)` | Runs `java -version` and returns the major version (handles the old `1.8` format) |
+| `readJavaVersion(javaHome)` | Reads the major version from the `release` file in a Java folder without starting Java (handles the old `1.8` format) |
+| `getInstalledJavaVersion(javaPath)` | Runs `java -version` and returns the major version; used only when there is no `release` file |
 | `isAllowed(rules)` | Evaluates Mojang `rules` (OS, architecture, features). The last matching rule wins. |
 | `limiter(worker, items, limit, title)` | Runs `worker` on every item with at most `limit` running at the same time, and shows a progress bar named `title` |
-| `checkDownloading(url)` | `fetch` that throws a clear error on any non-OK HTTP status |
-| `checkSha1(filePath, sha1)` | Returns `true` only if the file exists and its SHA1 matches |
+| `checkDownloading(url)` | `fetch` that tries 3 times, then shows a message and goes back to the menu |
+| `checkSha1(filePath, sha1)` | Returns `true` only if the file exists and its SHA1 matches; skips the hashing for a file in `verified.json` whose size and time have not changed |
 | `downloadClientJar`, `downloadLibrary`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
 | `printWithMargin(text, encoding, callback)` | Replaces `process.stdout.write`: adds the margin at the start of every line, then prints |
 | `loadProfiles()` / `saveProfiles(profiles)` | Read and write `profiles.json` |
 | `createProfile(profiles)` | Asks for a username and memory, saves the new profile, and returns it |
+| `editSettings()` | Lists the settings with their current values, asks for a new value, checks it, and saves `settings.json` |
+| `getLatestVersion()` / `updateLauncher()` | Read the newest version number on GitHub, and download and unpack it |
+| `restartLauncher()` | Starts the launcher again: replaces the process with `process.execve` on Linux and macOS, or exits with code `2` for the manager on Windows |
 | `showAnimatedText(text, time)` | Shows text with a moving rainbow for `time` milliseconds, or as plain text when `time` is `0` |
 
 ---
@@ -402,6 +432,7 @@ Created at runtime:
 └── .minecraft/
     ├── launcher_profiles.json        # Needed by the Fabric / Forge installers
     ├── libraries/                    # Shared Java libraries (Maven layout)
+    ├── verified.json                 # Files that already passed their SHA1 check, with size and time
     ├── assets/                       # Shared assets (indexes/ and objects/ by SHA1)
     ├── versions/
     │   ├── 26.3/
