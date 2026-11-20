@@ -475,10 +475,7 @@ async function downloadJava(component) {
   await limiter(
     async ([name, file]) => {
       const filePath = path.join(javaHome, name);
-      if (await checkSha1(filePath, file.downloads.raw.sha1)) return;
-      const response = await checkDownloading(file.downloads.raw.url);
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, Buffer.from(await response.arrayBuffer()));
+      await downloadFile(file.downloads.raw.url, filePath, file.downloads.raw.sha1);
       // java and its tools must be marked as programs on linux or they cannot run
       if (file.executable) await chmod(filePath, 0o755);
     },
