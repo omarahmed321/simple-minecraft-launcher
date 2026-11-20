@@ -583,6 +583,32 @@ async function createProfile(profiles) {
   return profile;
 }
 
+// lets the user pick a profile and deletes it after asking to be sure
+async function removeProfile(profiles) {
+  const toRemove = await p.select({
+    message: "Which profile do you wanna remove ?",
+    options: [
+      { value: "back", label: "← Back" },
+      ...profiles.map((saved) => ({
+        value: saved,
+        label: saved.name,
+        hint: `${saved.memory} GB`,
+      })),
+    ],
+  });
+  if (p.isCancel(toRemove) || toRemove === "back") return;
+
+  const isSure = await p.confirm({
+    message: `Delete "${toRemove.name}" ?`,
+    initialValue: false,
+  });
+  if (p.isCancel(isSure) || !isSure) return;
+
+  const remaining = profiles.filter((saved) => saved !== toRemove);
+  await saveProfiles(remaining);
+  p.log.success(`Profile "${toRemove.name}" removed`);
+}
+
 // lets the user change one setting from inside the launcher and saves it to settings.json
 async function editSettings() {
   const currentSettings = { ...DEFAULT_SETTINGS, ...savedSettings };
@@ -721,7 +747,8 @@ let profile = "new";
 if (profiles.length > 0) {
   profile = await p.select({
     message: "Choose a profile",
-    options: [
+      options: [
+      { value: "remove", label: "✖ remove a profile" },
       ...profiles.map((saved) => ({
         value: saved,
         label: saved.name,
@@ -734,8 +761,14 @@ if (profiles.length > 0) {
     p.cancel("Cancelled");
     process.exit(0);
   }
+
+  if (profile === "remove") {
+    await removeProfile(profiles);
+    restartLauncher();
+  }
 }
 if (profile === "new") profile = await createProfile(profiles);
+
 
 const username = profile.name;
 const memNumber = profile.memory;
