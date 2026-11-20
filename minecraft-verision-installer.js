@@ -204,7 +204,7 @@ async function fetchAllVersions(action) {
   if (shownVersions.length === 0) {
     p.cancel("No versions found");
     await sleep(3000);
-  restartLauncher();
+    restartLauncher();
   }
 
   return shownVersions;
@@ -759,10 +759,10 @@ if (versionJson.inheritsFrom) {
   );
   if (!existsSync(parentPath)) {
     p.cancel(
-     `${selectedVersion.id} needs ${parentId}. choose "install new version" and pick ${parentId}.`
+      `${selectedVersion.id} needs ${parentId}. choose "install new version" and pick ${parentId}.`,
     );
-     await sleep(3000);
-  restartLauncher();
+    await sleep(3000);
+    restartLauncher();
   }
   const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
   versionJson = mergeVersionJson(parentJson, versionJson);
@@ -824,7 +824,7 @@ if (installedJava === null) {
   p.cancel(
     `Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`,
   );
-   await sleep(3000);
+  await sleep(3000);
   restartLauncher();
 }
 
@@ -878,12 +878,21 @@ const indexPath = path.join(
   "indexes",
   `${versionJson.assetIndex.id}.json`,
 );
-// use the saved index when it is there and not broken, so installed versions start without internet
-if (!(await checkSha1(indexPath, versionJson.assetIndex.sha1))) {
-  const response = await checkDownloading(versionJson.assetIndex.url);
+// versions can share one index id with different content so each one is also kept by its sha1
+const indexSha1 = versionJson.assetIndex.sha1;
+const savedIndexPath = path.join(path.dirname(indexPath), `${indexSha1}.json`);
+if (!(await checkSha1(savedIndexPath, indexSha1))) {
   await mkdir(path.dirname(indexPath), { recursive: true });
-  await writeFile(indexPath, await response.text());
+  if (await checkSha1(indexPath, indexSha1)) {
+    await copyFile(indexPath, savedIndexPath);
+  } else {
+    const response = await checkDownloading(versionJson.assetIndex.url);
+    await writeFile(savedIndexPath, await response.text());
+  }
 }
+// the game reads the index by its id so the right copy goes there before every launch
+await copyFile(savedIndexPath, indexPath);
+
 const assetIndex = JSON.parse(await readFile(indexPath, "utf8"));
 const assetList = Object.entries(assetIndex.objects);
 await limiter(downloadOneAsset, assetList, ASSET_DOWNLOAD_LIMIT, "Assets");
