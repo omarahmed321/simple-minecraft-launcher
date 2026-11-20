@@ -203,7 +203,8 @@ async function fetchAllVersions(action) {
 
   if (shownVersions.length === 0) {
     p.cancel("No versions found");
-    process.exit(1);
+    await sleep(3000);
+  restartLauncher();
   }
 
   return shownVersions;
@@ -753,7 +754,8 @@ if (versionJson.inheritsFrom) {
     p.cancel(
       `${selectedVersion.id} needs ${parentId}. Run again, choose "install new version", and pick ${parentId}.`,
     );
-    process.exit(1);
+     await sleep(3000);
+  restartLauncher();
   }
   const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
   versionJson = mergeVersionJson(parentJson, versionJson);
@@ -815,14 +817,16 @@ if (installedJava === null) {
   p.cancel(
     `Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`,
   );
-  process.exit(1);
+   await sleep(3000);
+  restartLauncher();
 }
 
 if (installedJava < requiredJava) {
   p.cancel(
     `Minecraft ${selectedVersion.id} needs Java ${requiredJava}, but you have Java ${installedJava}.`,
   );
-  process.exit(1);
+  await sleep(3000);
+  restartLauncher();
 }
 
 //--------- Client.jar
