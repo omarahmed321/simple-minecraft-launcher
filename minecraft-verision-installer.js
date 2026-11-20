@@ -475,11 +475,18 @@ async function showAnimatedText(text, time) {
   animation.stop();
 }
 
-// reads the saved profiles or an empty list the first time lol
+// reads the saved profiles or an empty list the first time lol + error handling
 async function loadProfiles() {
   if (!existsSync(PROFILES_PATH)) return [];
-  const data = JSON.parse(await readFile(PROFILES_PATH, "utf8"));
-  return data.profiles;
+  try {
+    const data = JSON.parse(await readFile(PROFILES_PATH, "utf8"));
+    return data.profiles;
+  } catch {
+    console.log(
+      "profiles.json has a mistake in it. fix it or delete it to start with no profiles.",
+    );
+    process.exit(1);
+  }
 }
 
 // saves the profiles list to profiles.json
@@ -752,7 +759,7 @@ if (versionJson.inheritsFrom) {
   );
   if (!existsSync(parentPath)) {
     p.cancel(
-      `${selectedVersion.id} needs ${parentId}. Run again, choose "install new version", and pick ${parentId}.`,
+     `${selectedVersion.id} needs ${parentId}. choose "install new version" and pick ${parentId}.`
     );
      await sleep(3000);
   restartLauncher();
