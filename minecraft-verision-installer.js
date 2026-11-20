@@ -318,8 +318,15 @@ async function checkSha1(filePath, expectedSha1) {
   return true;
 }
 
-//  check the required version of java for the version / and see the version on the system
+// turns a full java version like 1.8.0_392 or 21.0.5 into its main number 8 or 21
+function parseJavaVersion(versionText) {
+  const parts = versionText.split(".");
+  // java 8 and older wrote their version as 1.8 so the real number is the second one
+  if (parts[0] === "1") return parseInt(parts[1]);
+  return parseInt(parts[0]);
+}
 
+//  check the required version of java for the version / and see the version on the system
 function getInstalledJavaVersion(javaPath) {
   const result = spawnSync(javaPath, ["-version"], { encoding: "utf8" });
   if (result.error) return null;
@@ -329,9 +336,7 @@ function getInstalledJavaVersion(javaPath) {
   const versionText = text.split('"')[1];
   if (!versionText) return null;
 
-  const parts = versionText.split(".");
-  if (parts[0] === "1") return parseInt(parts[1]);
-  return parseInt(parts[0]);
+  return parseJavaVersion(versionText);
 }
 // reads the java version from the release file in the java folder so java does not have to start
 async function readJavaVersion(javaHome) {
@@ -340,9 +345,7 @@ async function readJavaVersion(javaHome) {
   const text = await readFile(releasePath, "utf8");
   const versionText = text.split('JAVA_VERSION="')[1];
   if (!versionText) return null;
-  const parts = versionText.split('"')[0].split(".");
-  if (parts[0] === "1") return parseInt(parts[1]);
-  return parseInt(parts[0]);
+  return parseJavaVersion(versionText.split('"')[0]);
 }
 
 //  function makes a 128 bit hash uuid for every different user
