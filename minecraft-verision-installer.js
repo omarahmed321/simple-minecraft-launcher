@@ -291,6 +291,13 @@ async function checkDownloading(url) {
   restartLauncher();
 }
 
+// closes the launcher when the user presses ctrl+c at a question
+function exitIfCancelled(answer) {
+  if (!p.isCancel(answer)) return;
+  p.cancel("Cancelled");
+  process.exit(0);
+}
+
 // checks a file against its sha1 but skips the hashing when it passed before and did not change since
 async function checkSha1(filePath, expectedSha1) {
   if (!existsSync(filePath)) return false;
@@ -524,10 +531,7 @@ async function createProfile(profiles) {
       }
     },
   });
-  if (p.isCancel(name)) {
-    p.cancel("Cancelled");
-    process.exit(0);
-  }
+  exitIfCancelled(name);
 
   const memAnswer = await p.text({
     message:
@@ -541,10 +545,7 @@ async function createProfile(profiles) {
       }
     },
   });
-  if (p.isCancel(memAnswer)) {
-    p.cancel("Cancelled");
-    process.exit(0);
-  }
+  exitIfCancelled(memAnswer);
 
   const profile = { name: name, memory: Number(memAnswer) };
   profiles.push(profile);
@@ -682,10 +683,7 @@ if (latestVersion && latestVersion !== localPackage.version) {
   const wantsUpdate = await p.confirm({
     message: `Update available (${localPackage.version} → ${latestVersion}). Update now?`,
   });
-  if (p.isCancel(wantsUpdate)) {
-    p.cancel("Cancelled");
-    process.exit(0);
-  }
+exitIfCancelled(wantsUpdate);
   if (wantsUpdate) {
     try {
       await updateLauncher();
@@ -727,10 +725,7 @@ if (profiles.length > 0) {
       { value: "new", label: "+ create a new profile" },
     ],
   });
-  if (p.isCancel(profile)) {
-    p.cancel("Cancelled");
-    process.exit(0);
-  }
+exitIfCancelled(profile);
 
   if (profile === "remove") {
     await removeProfile(profiles);
@@ -754,10 +749,7 @@ const action = await p.select({
     { value: "exit", label: "Exit" },
   ],
 });
-if (p.isCancel(action)) {
-  p.cancel("Cancelled");
-  process.exit(0);
-}
+exitIfCancelled(action);
 if (action === "exit") process.exit(0);
 // settings are read once when the launcher starts so it opens again to use the new ones
 if (action === "settings") {
@@ -782,10 +774,7 @@ const selectedVersion = await p.autocomplete({
   ],
 });
 if (selectedVersion === "back") restartLauncher();
-if (p.isCancel(selectedVersion)) {
-  p.cancel("Cancelled");
-  process.exit(0);
-}
+exitIfCancelled(selectedVersion);
 
 // path.resolve actually will connect them all
 const versionDir = path.join(MINECRAFT_DIR, "versions", selectedVersion.id);
