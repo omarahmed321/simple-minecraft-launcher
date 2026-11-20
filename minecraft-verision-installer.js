@@ -13,6 +13,7 @@ import {
   readdir,
   copyFile,
   stat,
+  unlink,
 } from "node:fs/promises";
 // the name that shows in btop and ps
 process.title = "simple-launcher";
@@ -77,11 +78,13 @@ const UPDATE_PACKAGE_URL =
   "https://raw.githubusercontent.com/omarahmed321/simple-minecraft-launcher/instances-supported-version/package.json";
 const UPDATE_ZIP_URL =
   "https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/instances-supported-version.zip";
+
+const JAVA_RUNTIME_DIR = path.join(MINECRAFT_DIR, "runtime");
 const JAVA_SEARCH_DIRS = [
+  JAVA_RUNTIME_DIR,
   "/usr/lib/jvm",
   "C:\\Program Files\\Eclipse Adoptium",
 ];
-
 //--------- settings.json
 // creates settings.json with the defaults the first time
 if (!existsSync(SETTINGS_PATH)) {
@@ -467,6 +470,30 @@ async function findJava(requiredJava) {
   p.log.warn(`Java ${requiredJava} not found, using default java instead`);
   return JAVA_PATH;
 }
+
+// downloads the java a version needs from adoptium into .minecraft/runtime where findJava looks first
+async function downloadJava(javaVersion) {
+  const javaOs = { win32: "windows", darwin: "mac", linux: "linux" }[platform];
+  const javaArch = { x64: "x64", arm64: "aarch64" }[process.arch];
+  const url = `https://api.adoptium.net/v3/binary/latest/${javaVersion}/ga/${javaOs}/${javaArch}/jre/hotspot/normal/eclipse`;
+
+  const spinner = p.spinner();
+  spinner.start(`Downloading Java ${javaVersion}`);
+  const response = await checkDownloading(url);
+  await mkdir(JAVA_RUNTIME_DIR, { recursive: true });
+  const archivePath = path.join(JAVA_RUNTIME_DIR, `java-${javaVersion}.download`);
+  await writeFile(archivePath, Buffer.from(await response.arrayBuffer()));
+
+  spinner.message(`Unpacking Java ${javaVersion}`);
+  // tar is on linux mac and windows 10 and later and it opens zip files too
+  const unpack = spawnSync("tar", ["-xf", archivePath, "-C", JAVA_RUNTIME_DIR]);
+  await unlink(archivePath);
+  if (unpack.status !== 0) {
+    spinner.stop(`Could not unpack Java ${javaVersion}`);
+    return;
+  }
+  spinner.stop(`Java ${javaVersion} is ready`);
+}
 // shows text with a moving rainbow or as plain text when time is 0
 async function showAnimatedText(text, time) {
   if (time === 0) return console.log(text);
@@ -819,7 +846,18 @@ for (const lib of versionJson.libraries) {
 }
 //--------- Java Check
 
-const javaPath = await findJava(requiredJava);
+let javaPath = await findJava(requiredJava);
+// the exact java was not found so it offers to download it
+if (javaPath === JAVA_PATH) {
+  const wantsJava = await p.confirm({
+    message: `Java ${requiredJava} is not installed. Download it now? (about 50 MB)`,
+  });
+  if (!p.isCancel(wantsJava) && wantsJava) {
+    await downloadJava(requiredJava);
+    javaPath = await findJava(requiredJava);
+  }
+}
+
 // java is inside home/bin so going up twice gives the java folder
 const javaHome = path.dirname(path.dirname(javaPath));
 const installedJava =
