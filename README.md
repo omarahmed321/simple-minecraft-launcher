@@ -168,7 +168,7 @@ Copy one line into a terminal. It downloads the launcher from GitHub (no Git nee
 
 **Linux** (terminal):
 ```bash
-curl -fsSL https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/instances-supported-version.tar.gz | tar xz && cd simple-minecraft-launcher-instances-supported-version && ./install.sh
+curl -fsSL https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.tar.gz | tar xz && cd simple-minecraft-launcher-main && ./install.sh
 ```
 
 **Windows** (Command Prompt):
@@ -176,14 +176,14 @@ curl -fsSL https://github.com/omarahmed321/simple-minecraft-launcher/archive/ref
 Open **Command Prompt normally, not as administrator** (press `Win`, type `cmd`, press Enter). It opens in your user folder (`C:\Users\<your name>`), and the launcher is downloaded there. Running it as administrator opens it in `C:\Windows\System32` instead, so avoid that; the installers ask for permission on their own when they need it.
 
 ```bat
-curl -L -o launcher.zip https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/instances-supported-version.zip && tar -xf launcher.zip && cd simple-minecraft-launcher-instances-supported-version && install.bat
+curl -L -o launcher.zip https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.zip && tar -xf launcher.zip && cd simple-minecraft-launcher-main && install.bat
 ```
 
 `curl` and `tar` are built into Windows 10 and 11. This command is for Command Prompt; in PowerShell, open `cmd` first.
 
-Both commands create a `simple-minecraft-launcher-instances-supported-version` folder in the folder the terminal is opened in. After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside that folder. This install updates itself: when a new version is out, the launcher asks at startup.
+Both commands create a `simple-minecraft-launcher-main` folder in the folder the terminal is opened in. After the first run, start the launcher with `run.sh` (Linux) or `run.bat` (Windows) inside that folder. This install updates itself: when a new version is out, the launcher asks at startup.
 
-**Without a terminal:** switch to the `instances-supported-version` branch on the repository page, click **Code**, then **Download ZIP**, extract it, and double-click `install.bat` (Windows) or run `./install.sh` (Linux).
+**Without a terminal:** on the repository page, click **Code**, then **Download ZIP**, extract it, and double-click `install.bat` (Windows) or run `./install.sh` (Linux).
 
 ### Option 1: Setup script
 The scripts install **Node.js**, **Java 8, 17, 21, and 25**, and the npm packages, then start the launcher.
@@ -210,7 +210,7 @@ If the script says `Desktop folder not found`, Windows points the desktop to a f
 
 **Linux** (Ubuntu / Debian, Arch / CachyOS / Manjaro, Fedora):
 ```bash
-git clone -b instances-supported-version https://github.com/omarahmed321/simple-minecraft-launcher.git
+git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 cd simple-minecraft-launcher
 ./install.sh
 ```
@@ -218,7 +218,7 @@ The script uses `sudo` to install packages. If one Java version is not available
 
 **Windows** (10 or 11):
 ```powershell
-git clone -b instances-supported-version https://github.com/omarahmed321/simple-minecraft-launcher.git
+git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 ```
 Then open the folder and double-click **`install.bat`**.
 
@@ -243,7 +243,7 @@ On Arch, if `pacman` returns `404` for a package, run `sudo pacman -Syu` first t
 
 **Installation and execution:**
 ```bash
-git clone -b instances-supported-version https://github.com/omarahmed321/simple-minecraft-launcher.git
+git clone https://github.com/omarahmed321/simple-minecraft-launcher.git
 cd simple-minecraft-launcher
 npm install
 npm start

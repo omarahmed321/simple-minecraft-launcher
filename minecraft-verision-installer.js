@@ -75,9 +75,9 @@ const MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const ASSETS_URL = "https://resources.download.minecraft.net";
 const UPDATE_PACKAGE_URL =
-  "https://raw.githubusercontent.com/omarahmed321/simple-minecraft-launcher/instances-supported-version/package.json";
+  "https://raw.githubusercontent.com/omarahmed321/simple-minecraft-launcher/main/package.json";
 const UPDATE_ZIP_URL =
-  "https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/instances-supported-version.zip";
+  "https://github.com/omarahmed321/simple-minecraft-launcher/archive/refs/heads/main.zip";
 
 const JAVA_RUNTIME_DIR = path.join(MINECRAFT_DIR, "runtime");
 const JAVA_SEARCH_DIRS = [
