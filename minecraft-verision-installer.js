@@ -13,7 +13,7 @@ import {
   readdir,
   copyFile,
   stat,
-  unlink,
+  chmod,
 } from "node:fs/promises";
 // the name that shows in btop and ps
 process.title = "simple-launcher";
@@ -85,6 +85,19 @@ const JAVA_SEARCH_DIRS = [
   "/usr/lib/jvm",
   "C:\\Program Files\\Eclipse Adoptium",
 ];
+
+const JAVA_RUNTIME_URL =
+  "https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
+// the name mojang uses for each system and cpu in the java runtime list
+const JAVA_RUNTIME_PLATFORMS = {
+  "linux-x64": "linux",
+  "linux-ia32": "linux-i386",
+  "win32-x64": "windows-x64",
+  "win32-ia32": "windows-x86",
+  "win32-arm64": "windows-arm64",
+};
+
+
 //--------- settings.json
 // creates settings.json with the defaults the first time
 if (!existsSync(SETTINGS_PATH)) {
@@ -471,28 +484,35 @@ async function findJava(requiredJava) {
   return JAVA_PATH;
 }
 
-// downloads the java a version needs from adoptium into .minecraft/runtime where findJava looks first
-async function downloadJava(javaVersion) {
-  const javaOs = { win32: "windows", darwin: "mac", linux: "linux" }[platform];
-  const javaArch = { x64: "x64", arm64: "aarch64" }[process.arch];
-  const url = `https://api.adoptium.net/v3/binary/latest/${javaVersion}/ga/${javaOs}/${javaArch}/jre/hotspot/normal/eclipse`;
-
-  const spinner = p.spinner();
-  spinner.start(`Downloading Java ${javaVersion}`);
-  const response = await checkDownloading(url);
-  await mkdir(JAVA_RUNTIME_DIR, { recursive: true });
-  const archivePath = path.join(JAVA_RUNTIME_DIR, `java-${javaVersion}.download`);
-  await writeFile(archivePath, Buffer.from(await response.arrayBuffer()));
-
-  spinner.message(`Unpacking Java ${javaVersion}`);
-  // tar is on linux mac and windows 10 and later and it opens zip files too
-  const unpack = spawnSync("tar", ["-xf", archivePath, "-C", JAVA_RUNTIME_DIR]);
-  await unlink(archivePath);
-  if (unpack.status !== 0) {
-    spinner.stop(`Could not unpack Java ${javaVersion}`);
+// downloads the java a version needs from mojang into .minecraft/runtime/<component> where findJava looks first
+async function downloadJava(component) {
+  const javaPlatform = JAVA_RUNTIME_PLATFORMS[`${platform}-${process.arch}`];
+  const allRuntimes = await (await checkDownloading(JAVA_RUNTIME_URL)).json();
+  const runtime = allRuntimes[javaPlatform]?.[component]?.[0];
+  if (!runtime) {
+    p.log.warn(`Mojang has no ${component} for this system`);
     return;
   }
-  spinner.stop(`Java ${javaVersion} is ready`);
+
+  const manifest = await (await checkDownloading(runtime.manifest.url)).json();
+  const javaHome = path.join(JAVA_RUNTIME_DIR, component);
+  // the list also has folders and links but only real files need downloading
+  const files = Object.entries(manifest.files).filter(([, file]) => file.type === "file");
+
+  await limiter(
+    async ([name, file]) => {
+      const filePath = path.join(javaHome, name);
+      if (await checkSha1(filePath, file.downloads.raw.sha1)) return;
+      const response = await checkDownloading(file.downloads.raw.url);
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, Buffer.from(await response.arrayBuffer()));
+      // java and its tools must be marked as programs on linux or they cannot run
+      if (file.executable) await chmod(filePath, 0o755);
+    },
+    files,
+    ASSET_DOWNLOAD_LIMIT,
+    "Java",
+  );
 }
 // shows text with a moving rainbow or as plain text when time is 0
 async function showAnimatedText(text, time) {
@@ -850,10 +870,10 @@ let javaPath = await findJava(requiredJava);
 // the exact java was not found so it offers to download it
 if (javaPath === JAVA_PATH) {
   const wantsJava = await p.confirm({
-    message: `Java ${requiredJava} is not installed. Download it now? (about 50 MB)`,
+        message: `Java ${requiredJava} is not installed. Download it now?`,
   });
   if (!p.isCancel(wantsJava) && wantsJava) {
-    await downloadJava(requiredJava);
+     await downloadJava(versionJson.javaVersion?.component ?? "jre-legacy");
     javaPath = await findJava(requiredJava);
   }
 }
