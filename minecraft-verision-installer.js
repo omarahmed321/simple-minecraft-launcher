@@ -49,6 +49,7 @@ const DEFAULT_SETTINGS = {
   BAR_RENDERING_DELAY: 16,
   MARGIN_LEFT: 4,
   MARGIN_TOP: 2,
+  VERSIONS_SHOWN_LIMIT: 8,
 };
 
 //---- logo and colors
@@ -109,6 +110,7 @@ const {
   BAR_RENDERING_DELAY,
   MARGIN_LEFT,
   MARGIN_TOP,
+  VERSIONS_SHOWN_LIMIT,
 } = { ...DEFAULT_SETTINGS, ...savedSettings };
 
 //--------- verified.json
@@ -716,7 +718,7 @@ const shownVersions = await fetchAllVersions(action);
 const selectedVersion = await p.autocomplete({
   message: "Choose version:",
   placeholder: "write here the version",
-  maxItems: 8,
+  maxItems: VERSIONS_SHOWN_LIMIT,
   options: [
     { value: "back", label: "← Back" },
     ...shownVersions.map((version) => ({
