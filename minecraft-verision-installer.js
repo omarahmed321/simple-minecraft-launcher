@@ -220,9 +220,7 @@ async function fetchAllVersions(action) {
   }
 
   if (shownVersions.length === 0) {
-    p.cancel("No versions found");
-    await sleep(3000);
-    restartLauncher();
+    await backToMenu("No versions found");
   }
 
   return shownVersions;
@@ -284,11 +282,9 @@ async function checkDownloading(url) {
     if (attempt < 3) await sleep(1000 * attempt);
   }
   // still failing after 3 tries so it goes back to the menu instead of crashing
-  p.log.error(
+  await backToMenu(
     `Could not download ${path.basename(url)}. Check your internet and try again.`,
   );
-  await sleep(3000);
-  restartLauncher();
 }
 
 // closes the launcher when the user presses ctrl+c at a question
@@ -671,6 +667,13 @@ function restartLauncher() {
   process.exit(2);
 }
 
+// shows what went wrong for 3 seconds so it can be read then goes back to the menu
+async function backToMenu(message) {
+  p.cancel(message);
+  await sleep(3000);
+  restartLauncher();
+}
+
 //-------- Update Checking
 // checks if there is a newier version
 const localPackage = JSON.parse(
@@ -802,11 +805,9 @@ if (versionJson.inheritsFrom) {
     `${parentId}.json`,
   );
   if (!existsSync(parentPath)) {
-    p.cancel(
+    await backToMenu(
       `${selectedVersion.id} needs ${parentId}. choose "install new version" and pick ${parentId}.`,
     );
-    await sleep(3000);
-    restartLauncher();
   }
   const parentJson = JSON.parse(await readFile(parentPath, "utf8"));
   versionJson = mergeVersionJson(parentJson, versionJson);
@@ -874,21 +875,17 @@ if (javaPath === JAVA_PATH) {
 const javaHome = path.dirname(path.dirname(javaPath));
 const installedJava =
   (await readJavaVersion(javaHome)) ?? getInstalledJavaVersion(javaPath);
-p.log.info(`Installed Java: ${installedJava}`);
+p.log.info(`Installed java: ${installedJava}`);
 if (installedJava === null) {
-  p.cancel(
-    `Java not found at "${javaPath}". Install Java ${requiredJava} and try again.`,
+  await backToMenu(
+    `java not found at "${javaPath}" install Java ${requiredJava} and try again.`,
   );
-  await sleep(3000);
-  restartLauncher();
 }
 
 if (installedJava < requiredJava) {
-  p.cancel(
-    `Minecraft ${selectedVersion.id} needs Java ${requiredJava}, but you have Java ${installedJava}.`,
+  await backToMenu(
+    `minecraft ${selectedVersion.id} needs Java ${requiredJava} but you have java ${installedJava}.`,
   );
-  await sleep(3000);
-  restartLauncher();
 }
 
 //--------- Client.jar
