@@ -553,7 +553,10 @@ async function editSettings() {
   });
   if (p.isCancel(name) || name === "back") return;
   // download limits need at least 1 or nothing would download
-  const min = name.endsWith("_LIMIT") ? 1 : 0;
+  let min = 0;
+  if (name.endsWith("_LIMIT")) min = 1;
+  // clack never shows a list shorter than 5 rows
+  if (name === "VERSIONS_SHOWN_LIMIT") min = 5;
 
   const value = await p.text({
     message: `New value for ${name}`,
