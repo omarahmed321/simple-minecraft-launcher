@@ -48,7 +48,7 @@ The launcher is a single script that runs these stages in order:
    - **Legacy format** (before 1.19): natives live inside one library under `natives` and `downloads.classifiers`.
    - **Maven format** (Fabric, old Forge): only a `name` like `net.fabricmc:fabric-loader:0.19.5` and a repository `url`. The path is built from the name (`net/fabricmc/fabric-loader/0.19.5/fabric-loader-0.19.5.jar`).
    - Libraries that the Forge installer generated itself have an empty `url` and are used from disk without downloading.
-6. **Java selection**: Reads the required Java version (for example 8, 17, 21, or 25) and looks for an installed Java with exactly that version in `/usr/lib/jvm` (Linux) or `C:\Program Files\Eclipse Adoptium` (Windows). It reads each Java's version from the `release` file in its folder instead of starting Java, and only runs `java -version` for a folder without that file. If none matches, it falls back to the default `java`. If the Java it ends up with is older than the version needs, it says so and goes back to the menu.
+6. **Java selection**: Reads the required Java version (for example 8, 17, 21, or 25) and looks for an installed Java with exactly that version in `/usr/lib/jvm` (Linux) or `C:\Program Files\Eclipse Adoptium` (Windows). It reads each Java's version from the `release` file in its folder instead of starting Java, and only runs `java -version` for a folder without that file. Java the launcher downloaded itself (in `.minecraft/runtime/`) is checked first. If none matches, it offers to download the exact Java from Mojang (see [Automatic Java download](#automatic-java-download)); if you say no, it falls back to the default `java`. If the Java it ends up with is older than the version needs, it says so and goes back to the menu.
 7. **Downloads**: Downloads the client jar, the libraries, the asset index, and every asset object. Each file, the asset index included, is downloaded only if it is missing or its SHA1 does not match. Libraries and assets download in parallel with a **concurrency limit** (8 and 16 at a time). A failed download is tried 3 times; if it still fails, the launcher says so and goes back to the menu.
    - **Asset index**: Different versions can use the same index name (for example `36.json`) with different content. A copy of each index is also kept under its SHA1 (`indexes/<sha1>.json`), and the right one is copied to the name the game reads before every launch, so switching between those versions never needs the internet.
 8. **Verification**: Before downloading, every file that already exists is checked against its **SHA1**. Valid files are skipped; missing, partial, or corrupted files are downloaded again. Files are hashed in small pieces, so a large jar never sits in memory all at once.
@@ -78,6 +78,7 @@ The launcher is a single script that runs these stages in order:
 - **Standard `.minecraft` layout**: `versions/<id>/<id>.jar`, `<id>.json`, `libraries/`, `assets/`, and `launcher_profiles.json`, so official installers recognize the folder.
 - **Separate instances**: Each version gets its own `mods/`, `saves/`, `config/`, and settings under `instances/`.
 - **Automatic Java selection**: Uses Java 8, 17, 21, or 25 depending on what each version needs.
+- **Automatic Java download**: If the right Java is missing, the launcher offers to download it from Mojang, the same Java the official launcher uses.
 - **Shared downloads**: Libraries and assets are downloaded once and reused by every version.
 - **SHA1 verification**: Skips valid files and repairs missing or corrupted ones automatically.
 - **Install now, play later**: After installing a new version, the launcher asks whether to play it now or go back to the menu.
@@ -293,7 +294,20 @@ made by Omar
 - **Username**: 3 to 16 characters, using letters, numbers, and `_`.
 - **Memory**: whole number of GB between 1 and 32 (passed to Java as `-Xmx<number>G`).
 
-If an answer is not valid, the launcher shows the reason and asks again. Profiles are saved in `profiles.json` next to the launcher; to rename or delete one, edit that file. Press `Ctrl+C` at any question to exit.
+If an answer is not valid, the launcher shows the reason and asks again. Profiles are saved in `profiles.json` next to the launcher. To delete one, choose **✖ remove a profile** at the top of the profile list, pick it, and confirm; to rename one, edit that file. Press `Ctrl+C` at any question to exit.
+
+### Automatic Java download
+Every version says which Java it needs. If that exact Java is not installed, the launcher asks **Java <n> is not installed. Download it now?** and, on Yes, downloads it from Mojang's servers (the same servers as the game files) into `.minecraft/runtime/<component>/`, with a progress bar and a SHA1 check on every file. It is used for every version that needs that Java from then on. This works on Linux and Windows; on macOS install Java yourself.
+
+### Deleting a version
+There is no button for this on purpose. Close the launcher and delete the folder yourself:
+
+| Folder | What is in it | Delete it? |
+|---|---|---|
+| `.minecraft/versions/<version>/` | The game jar and its JSON | Yes, this removes the version from the list |
+| `.minecraft/instances/<version>/` | Your worlds, mods, and settings for that version | Only if you do not want them anymore |
+
+A Fabric or Forge version needs its base version (for example `1.20.1`), so delete the mod loader version too, or keep the base. `libraries/` and `assets/` are shared by every version; leave them.
 
 The first run of a version downloads the client, its libraries, and its assets. Later runs verify the files and start much faster. Mods go in `.minecraft/instances/<version>/mods/`, and worlds, logs, and settings are saved next to them.
 
@@ -333,7 +347,7 @@ A setting you delete from the file goes back to its default. If the file has a m
 ---
 
 ## Troubleshooting
-- **`Installed Java` is not the number the version needs**: That Java is not installed. Run the setup script again, or install it from the table in [Manual setup](#option-2-manual-setup). On Arch, `archlinux-java status` lists the installed versions.
+- **`Installed Java` is not the number the version needs**: That Java is not installed. Pick the version again and choose Yes when the launcher offers to download it, or run the setup script again, or install it from the table in [Manual setup](#option-2-manual-setup). On Arch, `archlinux-java status` lists the installed versions.
 - **`ClassCastException ... cannot be cast to class java.net.URLClassLoader`** or **`NoClassDefFoundError: net/minecraft/launchwrapper/...`**: An old Forge version ran on a new Java. Install Java 8.
 - **`<version> needs <base>`**: The mod loader's base version is missing. Choose "install new version" and pick the base version named in the message.
 - **`Minecraft <version> needs Java <n>, but you have Java <m>`**: Install the Java named in the message (run the setup script again), then pick the version again.
@@ -396,19 +410,25 @@ All logic lives in `minecraft-verision-installer.js`, split into sections in the
 | `findJava(requiredJava)` | Finds an installed Java with the exact major version |
 | `readJavaVersion(javaHome)` | Reads the major version from the `release` file in a Java folder without starting Java (handles the old `1.8` format) |
 | `getInstalledJavaVersion(javaPath)` | Runs `java -version` and returns the major version; used only when there is no `release` file |
+| `parseJavaVersion(text)` | Turns a full Java version like `1.8.0_392` or `21.0.5` into its main number (8 or 21) |
+| `downloadJava(component)` | Downloads the Java a version needs from Mojang into `.minecraft/runtime/<component>/` |
 | `isAllowed(rules)` | Evaluates Mojang `rules` (OS, architecture, features). The last matching rule wins. |
 | `limiter(worker, items, limit, title)` | Runs `worker` on every item with at most `limit` running at the same time, and shows a progress bar named `title` |
 | `checkDownloading(url)` | `fetch` that tries 3 times, then shows a message and goes back to the menu |
+| `downloadFile(url, filePath, sha1)` | Downloads one file unless it is already there and valid, then checks it; every download goes through it |
 | `checkSha1(filePath, sha1)` | Returns `true` only if the file exists and its SHA1 matches; skips the hashing for a file in `verified.json` whose size and time have not changed |
-| `downloadClientJar`, `downloadLibrary`, `downloadAsset`, `downloadOneAsset` | Download and verify the game files |
+| `downloadLibrary(file)`, `downloadAsset([name, asset])` | Build the path and URL of one library or asset and call `downloadFile` |
 | `getOfflineUUID(username)` | Builds the offline-mode player UUID |
 | `applyReplacements(argument)` | Replaces every `${...}` placeholder in one argument |
 | `printWithMargin(text, encoding, callback)` | Replaces `process.stdout.write`: adds the margin at the start of every line, then prints |
 | `loadProfiles()` / `saveProfiles(profiles)` | Read and write `profiles.json` |
 | `createProfile(profiles)` | Asks for a username and memory, saves the new profile, and returns it |
+| `removeProfile(profiles)` | Lists the profiles, asks to confirm, and saves the list without the chosen one |
 | `editSettings()` | Lists the settings with their current values, asks for a new value, checks it, and saves `settings.json` |
 | `getLatestVersion()` / `updateLauncher()` | Read the newest version number on GitHub, and download and unpack it |
 | `restartLauncher()` | Starts the launcher again: replaces the process with `process.execve` on Linux and macOS, or exits with code `2` for the manager on Windows |
+| `backToMenu(message)` | Shows what went wrong for 3 seconds, then calls `restartLauncher()` |
+| `exitIfCancelled(answer)` | Closes the launcher when `Ctrl+C` was pressed at a question |
 | `showAnimatedText(text, time)` | Shows text with a moving rainbow for `time` milliseconds, or as plain text when `time` is `0` |
 
 ---
@@ -433,6 +453,7 @@ Created at runtime:
     ├── launcher_profiles.json        # Needed by the Fabric / Forge installers
     ├── libraries/                    # Shared Java libraries (Maven layout)
     ├── verified.json                 # Files that already passed their SHA1 check, with size and time
+    ├── runtime/                      # Java downloaded by the launcher, one folder per Java (for example java-runtime-delta)
     ├── assets/                       # Shared assets (indexes/ and objects/ by SHA1)
     ├── versions/
     │   ├── 26.3/
